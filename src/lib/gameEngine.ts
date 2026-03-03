@@ -28,9 +28,7 @@ export function processTurn(
   if (!killerId || !players[killerId]) {
     throw new Error('Invalid killer position or player');
   }
-  if (requireKiller && eliminatedId === killerId) {
-    throw new Error('Killer and eliminated player cannot be the same');
-  }
+  const isSelfKill = requireKiller && eliminatedId === killerId;
 
   const updatedPlayers: Record<string, Player> = {};
   for (const key in players) {
@@ -38,7 +36,7 @@ export function processTurn(
   }
 
   const eloChanges: EloChange[] = [];
-  if (requireKiller) {
+  if (requireKiller && !isSelfKill) {
     // 1. Elimination ELO (killer-based mode)
     const { killerDelta, eliminatedDelta } = calculateEliminationElo(
       updatedPlayers[killerId].elo,
@@ -112,7 +110,7 @@ export function processTurn(
       }
     }
   } else {
-    // No-killer mode:
+    // No-killer mode, or self-kill in killer mode (#1 server kills self):
     // eliminated player is scored against the average of the 3 survivors,
     // and any ELO loss is split across those 3 survivors.
     const survivorIds = court.filter((id) => id !== eliminatedId);

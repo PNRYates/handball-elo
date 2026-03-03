@@ -71,6 +71,21 @@ test('store path in no-killer mode uses no-killer Elo model', () => {
   assert.equal(survivorTotal, -eliminatedDelta);
 });
 
+test('killer mode allows #1 self-kill from store path', () => {
+  resetStore();
+  const store = useGameStore.getState();
+
+  store.setRequireKiller(true);
+  store.initializeGame(['Alice', 'Bob', 'Cara', 'Dan']);
+  useGameStore.getState().recordTurn(0, 0);
+
+  const turn = useGameStore.getState().turns[0];
+  assert.equal(Boolean(turn), true);
+  assert.equal(turn.killerPosition, 0);
+  assert.equal(turn.eliminatedPosition, 0);
+  assert.deepEqual(useGameStore.getState().court, ['bob', 'cara', 'dan', 'alice']);
+});
+
 test('recent entrants tracks most recent replacements', () => {
   resetStore();
   const store = useGameStore.getState();

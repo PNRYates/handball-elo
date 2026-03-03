@@ -38,6 +38,22 @@ test('position #1 elimination gets second chance and rotates to #4', () => {
   assert.equal(result.newPlayer, null);
 });
 
+test('killer mode allows #1 self-kill and scores it like no-killer mode', () => {
+  const players = createPlayers();
+  const result = processTurn(['a', 'b', 'c', 'd'], players, 0, 0, undefined, true);
+
+  const hasKillerChange = result.eloChanges.some((c) => c.reason === 'elimination_kill');
+  const eliminatedDelta = result.eloChanges.find((c) => c.reason === 'elimination_death')?.delta ?? 0;
+  const survivorTotal = result.eloChanges
+    .filter((c) => c.reason === 'survival')
+    .reduce((sum, c) => sum + c.delta, 0);
+
+  assert.equal(hasKillerChange, false);
+  assert.equal(eliminatedDelta < 0, true);
+  assert.equal(survivorTotal, -eliminatedDelta);
+  assert.deepEqual(result.newCourt, ['b', 'c', 'd', 'a']);
+});
+
 test('no-killer mode: eliminated loss is split across 3 survivors', () => {
   const players = createPlayers();
   const result = processTurn(['a', 'b', 'c', 'd'], players, 2, 0, 'Eve', false);
