@@ -236,6 +236,16 @@ npm run release:patch   # or release:minor / release:major
 git push origin main --follow-tags
 ```
 
+## PR Preview URLs
+
+- Pull requests now get an automatic preview deployment URL via GitHub Actions.
+- The workflow comments the preview link directly on the PR.
+- For safe preview data, set repository variables:
+  - `VITE_SUPABASE_URL_TEST`
+  - `VITE_SUPABASE_ANON_KEY_TEST`
+
+If test vars are not set, it falls back to the default vars.
+
 ## Deployment
 
 ### Static hosting (recommended)
