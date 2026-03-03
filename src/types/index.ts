@@ -39,6 +39,7 @@ export interface GameSnapshot {
 
 export interface CompletedGame {
   id: number;
+  name?: string | null;
   startedAt: number;
   endedAt: number;
   turns: Turn[];

@@ -45,6 +45,7 @@ interface GameStore extends PersistedGameState {
   endGame: () => void;
   resetAllData: () => void;
   deleteGameFromHistory: (gameId: number) => void;
+  renameGameInHistory: (gameId: number, name: string) => void;
   renamePlayer: (oldId: string, newName: string) => void;
   hydrateFromRemote: (state: PersistedGameState) => void;
   setTheme: (theme: 'dark' | 'light') => void;
@@ -117,7 +118,15 @@ export function sanitizePersistedGameState(input: unknown): PersistedGameState {
       ? input.gameStartedAt
       : fallback.gameStartedAt;
   const gameHistory = Array.isArray(input.gameHistory)
-    ? (input.gameHistory as CompletedGame[])
+    ? (input.gameHistory as CompletedGame[]).map((game) => ({
+        ...game,
+        name:
+          typeof game.name === 'string'
+            ? game.name
+            : game.name === null
+              ? null
+              : null,
+      }))
     : fallback.gameHistory;
   const lastSnapshot = isRecord(input._lastSnapshot)
     ? (input._lastSnapshot as unknown as GameSnapshot)
@@ -328,6 +337,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const nextGameId = state.gameHistory.reduce((maxId, game) => Math.max(maxId, game.id), 0) + 1;
     const completedGame: CompletedGame = {
       id: nextGameId,
+      name: null,
       startedAt: state.gameStartedAt ?? state.turns[0].timestamp,
       endedAt: Date.now(),
       turns: [...state.turns],
@@ -357,6 +367,16 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const state = get();
     set({
       gameHistory: state.gameHistory.filter((game) => game.id !== gameId),
+    });
+  },
+
+  renameGameInHistory: (gameId, name) => {
+    const state = get();
+    const trimmed = name.trim();
+    set({
+      gameHistory: state.gameHistory.map((game) =>
+        game.id === gameId ? { ...game, name: trimmed.length > 0 ? trimmed : null } : game
+      ),
     });
   },
 

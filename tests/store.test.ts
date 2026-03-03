@@ -83,3 +83,40 @@ test('recent entrants tracks most recent replacements', () => {
   const recents = useGameStore.getState().recentEntrants;
   assert.deepEqual(recents.slice(0, 3), ['grace', 'frank', 'eve']);
 });
+
+test('renameGameInHistory renames/clears target game and ignores missing IDs', () => {
+  resetStore();
+  const store = useGameStore.getState();
+  store.initializeGame(['Alice', 'Bob', 'Cara', 'Dan']);
+  useGameStore.getState().recordTurn(3, 0, 'Eve');
+  useGameStore.getState().endGame();
+
+  const gameId = useGameStore.getState().gameHistory[0].id;
+  useGameStore.getState().renameGameInHistory(gameId, 'Friday Session');
+  assert.equal(useGameStore.getState().gameHistory[0].name, 'Friday Session');
+
+  useGameStore.getState().renameGameInHistory(gameId, '   ');
+  assert.equal(useGameStore.getState().gameHistory[0].name, null);
+
+  const before = JSON.stringify(useGameStore.getState().gameHistory);
+  useGameStore.getState().renameGameInHistory(9999, 'No-op');
+  const after = JSON.stringify(useGameStore.getState().gameHistory);
+  assert.equal(after, before);
+});
+
+test('sanitizePersistedGameState normalizes game names when absent', () => {
+  const sanitized = sanitizePersistedGameState({
+    gameHistory: [
+      {
+        id: 1,
+        startedAt: Date.now() - 1000,
+        endedAt: Date.now(),
+        turns: [],
+        startingCourt: ['a', 'b', 'c', 'd'],
+        finalCourt: ['a', 'b', 'c', 'd'],
+      },
+    ],
+  });
+
+  assert.equal(sanitized.gameHistory[0].name, null);
+});
