@@ -67,3 +67,11 @@ test('processTurn does not mutate original input players map', () => {
 
   assert.equal(after, before);
 });
+
+test('non-#1 elimination requires replacement name', () => {
+  const players = createPlayers();
+
+  assert.throws(() => {
+    processTurn(['a', 'b', 'c', 'd'], players, 2, 0, undefined, true);
+  }, /replacement player name is required/i);
+});

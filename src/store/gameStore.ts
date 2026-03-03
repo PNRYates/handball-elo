@@ -232,6 +232,15 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
   recordTurn: (eliminatedPos, killerPos, newPlayerName) => {
     const state = get();
+    if (!state.gameInProgress) return;
+    if (eliminatedPos < 0 || eliminatedPos > 3 || killerPos < 0 || killerPos > 3) return;
+    if (state.requireKiller && eliminatedPos === killerPos) return;
+
+    const trimmedReplacement = newPlayerName?.trim() ?? '';
+    if (eliminatedPos !== 0) {
+      if (!trimmedReplacement) return;
+      if (state.court.includes(trimmedReplacement.toLowerCase())) return;
+    }
 
     const snapshot: GameSnapshot = {
       players: JSON.parse(JSON.stringify(state.players)),
@@ -240,14 +249,19 @@ export const useGameStore = create<GameStore>((set, get) => ({
     };
     const turnStateSnapshot = createTurnStateSnapshot(state);
 
-    const result = processTurn(
-      state.court,
-      state.players,
-      eliminatedPos,
-      killerPos,
-      newPlayerName,
-      state.requireKiller
-    );
+    let result;
+    try {
+      result = processTurn(
+        state.court,
+        state.players,
+        eliminatedPos,
+        killerPos,
+        trimmedReplacement || undefined,
+        state.requireKiller
+      );
+    } catch {
+      return;
+    }
 
     const turn: Turn = {
       turnNumber: state.turnNumber,

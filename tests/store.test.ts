@@ -84,6 +84,30 @@ test('recent entrants tracks most recent replacements', () => {
   assert.deepEqual(recents.slice(0, 3), ['grace', 'frank', 'eve']);
 });
 
+test('recordTurn ignores invalid non-#1 elimination without replacement name', () => {
+  resetStore();
+  const store = useGameStore.getState();
+
+  store.initializeGame(['Alice', 'Bob', 'Cara', 'Dan']);
+  const before = JSON.stringify({
+    court: useGameStore.getState().court,
+    players: useGameStore.getState().players,
+    turnNumber: useGameStore.getState().turnNumber,
+    turns: useGameStore.getState().turns,
+  });
+
+  useGameStore.getState().recordTurn(2, 0, '   ');
+
+  const after = JSON.stringify({
+    court: useGameStore.getState().court,
+    players: useGameStore.getState().players,
+    turnNumber: useGameStore.getState().turnNumber,
+    turns: useGameStore.getState().turns,
+  });
+
+  assert.equal(after, before);
+});
+
 test('renameGameInHistory renames/clears target game and ignores missing IDs', () => {
   resetStore();
   const store = useGameStore.getState();

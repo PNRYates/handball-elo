@@ -20,13 +20,22 @@ export function processTurn(
   newPlayerName?: string,
   requireKiller: boolean = true
 ): TurnResult {
+  const eliminatedId = court[eliminatedPos];
+  const killerId = court[killerPos];
+  if (!eliminatedId || !players[eliminatedId]) {
+    throw new Error('Invalid eliminated position or player');
+  }
+  if (!killerId || !players[killerId]) {
+    throw new Error('Invalid killer position or player');
+  }
+  if (requireKiller && eliminatedId === killerId) {
+    throw new Error('Killer and eliminated player cannot be the same');
+  }
+
   const updatedPlayers: Record<string, Player> = {};
   for (const key in players) {
     updatedPlayers[key] = { ...players[key] };
   }
-
-  const eliminatedId = court[eliminatedPos];
-  const killerId = court[killerPos];
 
   const eloChanges: EloChange[] = [];
   if (requireKiller) {
@@ -163,7 +172,10 @@ export function processTurn(
       if (i !== eliminatedPos) remaining.push(court[i]);
     }
 
-    const trimmedName = newPlayerName!.trim();
+    const trimmedName = newPlayerName?.trim();
+    if (!trimmedName) {
+      throw new Error('A replacement player name is required for non-#1 elimination');
+    }
     const normalizedId = trimmedName.toLowerCase();
 
     if (updatedPlayers[normalizedId]) {
