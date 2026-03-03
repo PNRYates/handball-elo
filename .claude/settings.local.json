@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:gist.github.com)",
+      "Bash(npm create vite@latest . -- --template react-ts)",
+      "Bash(npm install --legacy-peer-deps)",
+      "Bash(sudo rm -rf /Users/peter/.npm/_cacache)",
+      "Bash(npm install --legacy-peer-deps --cache /tmp/npm-cache-handball)",
+      "Bash(npm install zustand react-router-dom tailwindcss @tailwindcss/vite --legacy-peer-deps --cache /tmp/npm-cache-handball)",
+      "mcp__Claude_Preview__preview_start",
+      "Bash(npx tsc --noEmit)",
+      "Bash(lsof -i :5173)"
+    ]
+  }
+}

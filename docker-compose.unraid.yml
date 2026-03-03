@@ -1,0 +1,7 @@
+services:
+  handball-elo:
+    build: .
+    container_name: handball-elo
+    ports:
+      - "8080:80"
+    restart: unless-stopped
