@@ -22,7 +22,7 @@ export default function InstructionsPage() {
       <section className="bg-gray-800 border border-gray-700 rounded-lg p-4 space-y-2">
         <h2 className="font-medium">No-killer mode</h2>
         <p className="text-sm text-gray-400">In Settings, you can turn off the killer requirement.</p>
-        <p className="text-sm text-gray-400">Then you only choose who got eliminated; the app auto-assigns killer logic for scoring.</p>
+        <p className="text-sm text-gray-400">Then you only choose who got eliminated; the eliminated loss is distributed across survivors.</p>
       </section>
 
       <section className="bg-gray-800 border border-gray-700 rounded-lg p-4 space-y-2">
@@ -36,7 +36,7 @@ export default function InstructionsPage() {
         <h2 className="font-medium">Other pages</h2>
         <p className="text-sm text-gray-400">Leaderboard: rankings and rename players.</p>
         <p className="text-sm text-gray-400">History: full turn-by-turn log for current and past games.</p>
-        <p className="text-sm text-gray-400">Analysis: position percentages and player aggression metrics.</p>
+        <p className="text-sm text-gray-400">Analysis: filterable dashboard for trends, head-to-head rivalries, and position strategy.</p>
       </section>
     </div>
   );

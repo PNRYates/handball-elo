@@ -3,6 +3,7 @@
 React + TypeScript app for tracking handball ELO with:
 - Google OAuth login
 - Postgres-backed state (Supabase)
+- Advanced analytics dashboard (trends, head-to-head, position strategy)
 - Static or Docker hosting
 
 ## 1. Supabase setup
@@ -66,3 +67,4 @@ The app will be available on `http://<unraid-ip>:8080`.
 - The app now syncs game state to `public.user_game_state` per authenticated user.
 - Logging out clears the local auth session but keeps server data.
 - If sync fails, UI shows `Sync error` in the top bar.
+- Analytics supports all-time/default filtering plus current game, last N games, and game-range views.
