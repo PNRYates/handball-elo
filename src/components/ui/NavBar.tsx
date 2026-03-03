@@ -4,6 +4,8 @@ const links = [
   { to: '/', label: 'Court' },
   { to: '/leaderboard', label: 'Leaderboard' },
   { to: '/history', label: 'History' },
+  { to: '/analysis', label: 'Analysis' },
+  { to: '/instructions', label: 'Instructions' },
   { to: '/settings', label: 'Settings' },
 ];
 
@@ -29,13 +31,13 @@ export default function NavBar({ userEmail, syncLabel, onLogout }: NavBarProps) 
           Sign out
         </button>
       </div>
-      <div className="max-w-lg mx-auto flex">
+      <div className="max-w-lg mx-auto flex overflow-x-auto">
         {links.map((link) => (
           <NavLink
             key={link.to}
             to={link.to}
             className={({ isActive }) =>
-              `flex-1 text-center py-3 text-sm font-medium transition-colors ${
+              `px-3 shrink-0 text-center py-3 text-sm font-medium transition-colors ${
                 isActive
                   ? 'text-amber-400 border-b-2 border-amber-400'
                   : 'text-gray-400 hover:text-gray-200'

@@ -165,13 +165,14 @@ export const useGameStore = create<GameStore>((set, get) => ({
       turnNumber: state.turnNumber,
     };
 
-    const result = processTurn(
-      state.court,
-      state.players,
-      eliminatedPos,
-      killerPos,
-      newPlayerName
-    );
+        const result = processTurn(
+          state.court,
+          state.players,
+          eliminatedPos,
+          killerPos,
+          newPlayerName,
+          state.requireKiller
+        );
 
     const turn: Turn = {
       turnNumber: state.turnNumber,

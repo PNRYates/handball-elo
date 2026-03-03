@@ -17,6 +17,16 @@ export function calculateEliminationElo(
   return { killerDelta, eliminatedDelta };
 }
 
+export function calculateEliminationVsAverageElo(
+  eliminatedRating: number,
+  averageOpponentRating: number,
+  k: number = DEFAULT_K
+): { eliminatedDelta: number; survivorPool: number } {
+  const expected = expectedScore(eliminatedRating, averageOpponentRating);
+  const eliminatedDelta = Math.round(k * (0 - expected));
+  return { eliminatedDelta, survivorPool: -eliminatedDelta };
+}
+
 export function calculateSurvivalBonus(
   survivorRating: number,
   averageOpponentRating: number,

@@ -5,6 +5,8 @@ import CourtPage from './pages/CourtPage';
 import LeaderboardPage from './pages/LeaderboardPage';
 import HistoryPage from './pages/HistoryPage';
 import SettingsPage from './pages/SettingsPage';
+import InstructionsPage from './pages/InstructionsPage';
+import AnalysisPage from './pages/AnalysisPage';
 import {
   getCurrentSession,
   getCurrentUser,
@@ -115,6 +117,8 @@ export default function App() {
           <Route path="/" element={<CourtPage />} />
           <Route path="/leaderboard" element={<LeaderboardPage />} />
           <Route path="/history" element={<HistoryPage />} />
+          <Route path="/analysis" element={<AnalysisPage />} />
+          <Route path="/instructions" element={<InstructionsPage />} />
           <Route path="/settings" element={<SettingsPage />} />
         </Routes>
       </main>

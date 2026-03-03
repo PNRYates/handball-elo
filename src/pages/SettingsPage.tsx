@@ -68,7 +68,7 @@ export default function SettingsPage() {
         </label>
         {!requireKiller && (
           <p className="text-xs text-amber-400">
-            Killer is auto-assigned to #1 (or #2 when #1 is eliminated).
+            Eliminated player is rated vs average survivor skill, and the loss is split across survivors.
           </p>
         )}
       </section>
