@@ -24,5 +24,7 @@ export function calculateSurvivalBonus(
 ): number {
   const k = isPositionOne ? POSITION_1_SURVIVAL_K : SURVIVAL_K;
   const expected = expectedScore(survivorRating, averageOpponentRating);
-  return Math.round(k * (0.5 - expected));
+  // Ensure survival always grants a visible passive gain.
+  // Lower-rated survivors still earn a larger bonus via the expected-score term.
+  return Math.max(1, Math.round(k * (0.5 - expected)));
 }

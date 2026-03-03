@@ -12,6 +12,8 @@ export interface PersistedGameState {
   gameHistory: CompletedGame[];
   _lastSnapshot: GameSnapshot | null;
   isInitialized: boolean;
+  theme: 'dark' | 'light';
+  requireKiller: boolean;
 }
 
 interface GameStore extends PersistedGameState {
@@ -26,6 +28,8 @@ interface GameStore extends PersistedGameState {
   resetAllData: () => void;
   renamePlayer: (oldId: string, newName: string) => void;
   hydrateFromRemote: (state: PersistedGameState) => void;
+  setTheme: (theme: 'dark' | 'light') => void;
+  setRequireKiller: (requireKiller: boolean) => void;
 }
 
 function createInitialState(): PersistedGameState {
@@ -39,6 +43,8 @@ function createInitialState(): PersistedGameState {
     gameHistory: [],
     _lastSnapshot: null,
     isInitialized: false,
+    theme: 'dark',
+    requireKiller: true,
   };
 }
 
@@ -53,6 +59,8 @@ export function getPersistedGameState(state: PersistedGameState): PersistedGameS
     gameHistory: state.gameHistory,
     _lastSnapshot: state._lastSnapshot,
     isInitialized: state.isInitialized,
+    theme: state.theme,
+    requireKiller: state.requireKiller,
   };
 }
 
@@ -84,6 +92,9 @@ export function sanitizePersistedGameState(input: unknown): PersistedGameState {
     ? (input._lastSnapshot as unknown as GameSnapshot)
     : null;
   const isInitialized = typeof input.isInitialized === 'boolean' ? input.isInitialized : fallback.isInitialized;
+  const theme = input.theme === 'light' ? 'light' : 'dark';
+  const requireKiller =
+    typeof input.requireKiller === 'boolean' ? input.requireKiller : fallback.requireKiller;
 
   return {
     players,
@@ -95,6 +106,8 @@ export function sanitizePersistedGameState(input: unknown): PersistedGameState {
     gameHistory,
     _lastSnapshot: lastSnapshot,
     isInitialized,
+    theme,
+    requireKiller,
   };
 }
 
@@ -104,6 +117,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
   hydrateFromRemote: (state) => {
     set(sanitizePersistedGameState(state));
   },
+
+  setTheme: (theme) => set({ theme }),
+
+  setRequireKiller: (requireKiller) => set({ requireKiller }),
 
   initializeGame: (names) => {
     const state = get();

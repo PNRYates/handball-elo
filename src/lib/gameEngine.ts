@@ -80,6 +80,24 @@ export function processTurn(
     }
   }
 
+  // Tune scoring so killer gain is 3x the total passive survivor gain each turn.
+  const survivorTotal = eloChanges
+    .filter((change) => change.reason === 'survival')
+    .reduce((sum, change) => sum + change.delta, 0);
+  const targetKillerDelta = Math.round(survivorTotal * 3);
+
+  const killerChange = eloChanges.find(
+    (change) => change.playerId === killerId && change.reason === 'elimination_kill'
+  );
+  if (killerChange) {
+    const killerAdjustment = targetKillerDelta - killerChange.delta;
+    if (killerAdjustment !== 0) {
+      updatedPlayers[killerId].elo += killerAdjustment;
+      killerChange.delta += killerAdjustment;
+      killerChange.newElo = updatedPlayers[killerId].elo;
+    }
+  }
+
   // 3. Increment gamesPlayed for all court players
   for (const id of court) {
     updatedPlayers[id].gamesPlayed += 1;
@@ -119,6 +137,29 @@ export function processTurn(
 
     remaining.push(normalizedId);
     newCourt = remaining as [string, string, string, string];
+  }
+
+  // Keep each turn strictly zero-sum to prevent long-run rating inflation/deflation.
+  const netDelta = eloChanges.reduce((sum, change) => sum + change.delta, 0);
+  if (netDelta !== 0) {
+    const correctedEliminated = updatedPlayers[eliminatedId];
+    correctedEliminated.elo -= netDelta;
+
+    const eliminatedChange = eloChanges.find(
+      (change) => change.playerId === eliminatedId && change.reason === 'elimination_death'
+    );
+    if (eliminatedChange) {
+      eliminatedChange.delta -= netDelta;
+      eliminatedChange.newElo = correctedEliminated.elo;
+    } else {
+      eloChanges.push({
+        playerId: eliminatedId,
+        previousElo: correctedEliminated.elo + netDelta,
+        newElo: correctedEliminated.elo,
+        delta: -netDelta,
+        reason: 'elimination_death',
+      });
+    }
   }
 
   return { newCourt, updatedPlayers, newPlayer, eloChanges };

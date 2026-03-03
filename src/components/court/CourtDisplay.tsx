@@ -31,6 +31,10 @@ export default function CourtDisplay({
   const court = useGameStore((s) => s.court);
   const players = useGameStore((s) => s.players);
   const turnNumber = useGameStore((s) => s.turnNumber);
+  const requireKiller = useGameStore((s) => s.requireKiller);
+  const prompt = !requireKiller && phase === 'select_eliminated'
+    ? 'Press 1–4: Who was eliminated?'
+    : phasePrompts[phase];
 
   return (
     <div className="space-y-2">
@@ -38,7 +42,7 @@ export default function CourtDisplay({
         <h2 className="text-xs font-medium text-gray-500 uppercase tracking-wide">
           Turn #{turnNumber + 1}
         </h2>
-        <span className="text-xs text-gray-500">{phasePrompts[phase]}</span>
+        <span className="text-xs text-gray-500">{prompt}</span>
       </div>
       {court.map((playerId, i) => {
         const player = players[playerId];

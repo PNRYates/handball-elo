@@ -76,7 +76,12 @@ function parseHashSession(): SupabaseSession | null {
   if (!Number.isFinite(expiresAt)) return null;
 
   // Remove OAuth hash params from URL after successful parse.
-  history.replaceState(null, '', window.location.pathname + window.location.search);
+  // With HashRouter enabled, restore a route hash so the app renders immediately.
+  const useHashRouter = import.meta.env.VITE_USE_HASH_ROUTER === 'true';
+  const cleanUrl = useHashRouter
+    ? `${window.location.pathname}${window.location.search}#/`
+    : `${window.location.pathname}${window.location.search}`;
+  history.replaceState(null, '', cleanUrl);
 
   return {
     accessToken,

@@ -4,6 +4,7 @@ const links = [
   { to: '/', label: 'Court' },
   { to: '/leaderboard', label: 'Leaderboard' },
   { to: '/history', label: 'History' },
+  { to: '/settings', label: 'Settings' },
 ];
 
 interface NavBarProps {

@@ -7,6 +7,7 @@ import CourtDisplay from '../components/court/CourtDisplay';
 import TurnRecorder from '../components/turn/TurnRecorder';
 
 export default function CourtPage() {
+  const requireKiller = useGameStore((s) => s.requireKiller);
   const gameInProgress = useGameStore((s) => s.gameInProgress);
   const court = useGameStore((s) => s.court);
   const players = useGameStore((s) => s.players);
@@ -25,8 +26,14 @@ export default function CourtPage() {
   // Derived state
   const needsNewPlayer = eliminatedPos !== null && eliminatedPos !== 0;
   const phase: SelectionPhase =
-    killerPos === null
-      ? 'select_killer'
+    requireKiller
+      ? killerPos === null
+        ? 'select_killer'
+        : eliminatedPos === null
+          ? 'select_eliminated'
+          : needsNewPlayer
+            ? 'input_new_player'
+            : 'ready_to_confirm'
       : eliminatedPos === null
         ? 'select_eliminated'
         : needsNewPlayer
@@ -36,10 +43,12 @@ export default function CourtPage() {
   const newPlayerOnCourt =
     newPlayerName.trim().length > 0 &&
     court.includes(newPlayerName.trim().toLowerCase());
+  const fallbackKillerPos = (eliminatedPos === 0 ? 1 : 0) as CourtPosition;
+  const effectiveKillerPos = requireKiller ? killerPos : (eliminatedPos !== null ? fallbackKillerPos : null);
   const canSubmit =
-    killerPos !== null &&
+    effectiveKillerPos !== null &&
     eliminatedPos !== null &&
-    killerPos !== eliminatedPos &&
+    effectiveKillerPos !== eliminatedPos &&
     (!needsNewPlayer || (newPlayerName.trim().length > 0 && !newPlayerOnCourt));
 
   const reserves = Object.values(players)
@@ -61,21 +70,30 @@ export default function CourtPage() {
   const handleConfirm = useCallback(
     (nameOverride?: string) => {
       const name = nameOverride ?? newPlayerName.trim();
-      if (killerPos === null || eliminatedPos === null) return;
-      if (killerPos === eliminatedPos) return;
+      if (effectiveKillerPos === null || eliminatedPos === null) return;
+      if (effectiveKillerPos === eliminatedPos) return;
       if (needsNewPlayer && !name) return;
       if (needsNewPlayer && court.includes(name.toLowerCase())) return;
       recordTurn(
         eliminatedPos,
-        killerPos,
+        effectiveKillerPos,
         needsNewPlayer ? name : undefined
       );
     },
-    [killerPos, eliminatedPos, needsNewPlayer, newPlayerName, court, recordTurn]
+    [effectiveKillerPos, eliminatedPos, needsNewPlayer, newPlayerName, court, recordTurn]
   );
 
   const handlePositionPress = useCallback(
     (pos: CourtPosition) => {
+      if (!requireKiller) {
+        if (eliminatedPos !== null) return;
+        setEliminatedPos(pos);
+        if (pos !== 0) {
+          setTimeout(() => inputRef.current?.focus(), 0);
+        }
+        return;
+      }
+
       if (killerPos === null) {
         setKillerPos(pos);
       } else if (eliminatedPos === null) {
@@ -86,7 +104,7 @@ export default function CourtPage() {
         }
       }
     },
-    [killerPos, eliminatedPos]
+    [requireKiller, killerPos, eliminatedPos]
   );
 
   // Global keyboard handler
@@ -126,14 +144,15 @@ export default function CourtPage() {
   return (
     <div className="space-y-4">
       <CourtDisplay
-        killerPos={killerPos}
+        killerPos={requireKiller ? killerPos : null}
         eliminatedPos={eliminatedPos}
         onPositionClick={handlePositionPress}
         phase={phase}
       />
       <TurnRecorder
-        killerPos={killerPos}
+        killerPos={effectiveKillerPos}
         eliminatedPos={eliminatedPos}
+        requireKiller={requireKiller}
         newPlayerName={newPlayerName}
         onNewPlayerNameChange={setNewPlayerName}
         onConfirm={handleConfirm}

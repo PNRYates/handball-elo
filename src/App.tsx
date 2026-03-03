@@ -4,6 +4,7 @@ import NavBar from './components/ui/NavBar';
 import CourtPage from './pages/CourtPage';
 import LeaderboardPage from './pages/LeaderboardPage';
 import HistoryPage from './pages/HistoryPage';
+import SettingsPage from './pages/SettingsPage';
 import {
   getCurrentSession,
   getCurrentUser,
@@ -13,6 +14,7 @@ import {
   type SupabaseUser,
 } from './lib/supabaseRest';
 import { useRemoteSync } from './lib/useRemoteSync';
+import { useGameStore } from './store/gameStore';
 
 function LoginView({ error }: { error: string | null }) {
   return (
@@ -34,6 +36,7 @@ function LoginView({ error }: { error: string | null }) {
 }
 
 export default function App() {
+  const theme = useGameStore((s) => s.theme);
   const [authLoading, setAuthLoading] = useState(true);
   const [authError, setAuthError] = useState<string | null>(null);
   const [session, setSession] = useState<SupabaseSession | null>(null);
@@ -75,6 +78,10 @@ export default function App() {
 
   const syncStatus = useRemoteSync(user, session);
 
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+  }, [theme]);
+
   if (authLoading) {
     return <LoginView error={null} />;
   }
@@ -108,6 +115,7 @@ export default function App() {
           <Route path="/" element={<CourtPage />} />
           <Route path="/leaderboard" element={<LeaderboardPage />} />
           <Route path="/history" element={<HistoryPage />} />
+          <Route path="/settings" element={<SettingsPage />} />
         </Routes>
       </main>
     </div>

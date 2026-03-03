@@ -7,6 +7,7 @@ import AutocompleteInput from './AutocompleteInput';
 interface Props {
   killerPos: CourtPosition | null;
   eliminatedPos: CourtPosition | null;
+  requireKiller: boolean;
   newPlayerName: string;
   onNewPlayerNameChange: (name: string) => void;
   onConfirm: (nameOverride?: string) => void;
@@ -21,6 +22,7 @@ interface Props {
 export default function TurnRecorder({
   killerPos,
   eliminatedPos,
+  requireKiller,
   newPlayerName,
   onNewPlayerNameChange,
   onConfirm,
@@ -34,12 +36,14 @@ export default function TurnRecorder({
   const court = useGameStore((s) => s.court);
   const players = useGameStore((s) => s.players);
 
-  // Nothing to show until at least killer + eliminated selected
-  if (killerPos === null || eliminatedPos === null) return null;
+  // Nothing to show until at least eliminated selected (and killer if required)
+  if (eliminatedPos === null) return null;
+  if (requireKiller && killerPos === null) return null;
 
-  const killer = players[court[killerPos]];
+  const killer = killerPos !== null ? players[court[killerPos]] : null;
   const eliminated = players[court[eliminatedPos]];
-  if (!killer || !eliminated) return null;
+  if (!eliminated) return null;
+  if (requireKiller && !killer) return null;
 
   const isReturningPlayer =
     newPlayerName.trim().length > 0 &&
@@ -52,8 +56,14 @@ export default function TurnRecorder({
     <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-3 space-y-3">
       {/* Summary */}
       <p className="text-sm">
-        <span className="text-green-400 font-medium">{killer.name}</span>
-        <span className="text-gray-500"> eliminated </span>
+        {requireKiller && killer ? (
+          <>
+            <span className="text-green-400 font-medium">{killer.name}</span>
+            <span className="text-gray-500"> eliminated </span>
+          </>
+        ) : (
+          <span className="text-gray-500">Eliminated: </span>
+        )}
         <span className="text-red-400 font-medium">{eliminated.name}</span>
         <span className="text-gray-600"> (#{eliminatedPos + 1})</span>
         {eliminatedPos === 0 && (
