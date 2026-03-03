@@ -81,6 +81,8 @@ export default function App() {
 
   const bootAuth = useCallback(async () => {
     if (sampleMode) {
+      setAuthError(null);
+      hydrateFromRemote(buildSampleState());
       setAuthLoading(false);
       return;
     }
@@ -111,7 +113,7 @@ export default function App() {
     } finally {
       setAuthLoading(false);
     }
-  }, [sampleMode]);
+  }, [hydrateFromRemote, sampleMode]);
 
   useEffect(() => {
     void bootAuth();
