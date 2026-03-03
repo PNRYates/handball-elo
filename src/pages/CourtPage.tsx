@@ -217,21 +217,49 @@ export default function CourtPage() {
         showQuickSwap={showQuickSwap}
       />
       <div className="flex gap-2">
-        {!isMobile && canUndo && (
-          <button
-            onClick={undoLastTurn}
-            className="flex-1 text-sm bg-gray-800 border border-gray-700 hover:border-gray-600 text-gray-400 py-2 rounded-lg transition-colors"
-          >
-            Undo Last Turn
-          </button>
-        )}
-        {!isMobile && canRedo && (
-          <button
-            onClick={redoLastTurn}
-            className="flex-1 text-sm bg-gray-800 border border-gray-700 hover:border-gray-600 text-gray-400 py-2 rounded-lg transition-colors"
-          >
-            Redo Turn
-          </button>
+        {!isMobile && (
+          <>
+            <button
+              type="button"
+              disabled={!canUndo}
+              onClick={undoLastTurn}
+              className="flex-1 text-sm bg-gray-800 border border-gray-700 text-gray-300 py-2 rounded-lg transition-colors hover:border-gray-600 disabled:text-gray-600 disabled:cursor-not-allowed disabled:hover:border-gray-700"
+            >
+              <span className="inline-flex items-center justify-center gap-2">
+                <svg viewBox="0 0 24 24" aria-hidden="true" className="w-4 h-4">
+                  <path
+                    d="M8 8V4L3 9l5 5v-4h6a5 5 0 1 1-4.47 7.23"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.9"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+                Undo
+              </span>
+            </button>
+            <button
+              type="button"
+              disabled={!canRedo}
+              onClick={redoLastTurn}
+              className="flex-1 text-sm bg-gray-800 border border-gray-700 text-gray-300 py-2 rounded-lg transition-colors hover:border-gray-600 disabled:text-gray-600 disabled:cursor-not-allowed disabled:hover:border-gray-700"
+            >
+              <span className="inline-flex items-center justify-center gap-2">
+                <svg viewBox="0 0 24 24" aria-hidden="true" className="w-4 h-4">
+                  <path
+                    d="M16 8V4l5 5-5 5v-4h-6a5 5 0 1 0 4.47 7.23"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.9"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+                Redo
+              </span>
+            </button>
+          </>
         )}
         <button
           onClick={() => {
