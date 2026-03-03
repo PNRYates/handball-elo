@@ -203,16 +203,25 @@ npm test
 
 ## Environment Variables
 
-Create `.env` from `.env.example`:
+Use separate env files for local testing vs production.
 
 ```bash
-cp .env.example .env
+cp .env.development.example .env.development
+cp .env.production.example .env.production
 ```
 
-Set:
+Set in each file:
 - `VITE_SUPABASE_URL`
 - `VITE_SUPABASE_ANON_KEY`
 - `VITE_USE_HASH_ROUTER=true` only if host cannot do SPA rewrites
+
+Recommended setup:
+- `.env.development` -> Supabase test project (safe data)
+- `.env.production` -> Supabase production project
+
+Vite behavior:
+- `npm run dev` uses `.env.development`
+- `npm run build` uses `.env.production`
 
 ## Releases & Versioning
 

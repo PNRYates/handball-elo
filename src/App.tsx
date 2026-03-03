@@ -148,7 +148,7 @@ export default function App() {
   const appVersion = import.meta.env.VITE_APP_VERSION ?? 'dev';
 
   return (
-    <div className="min-h-screen bg-gray-950 text-gray-100">
+    <div className="min-h-screen bg-gray-950 text-gray-100 flex flex-col">
       <NavBar
         userEmail={sampleMode ? 'Sample mode' : user?.email ?? 'Signed in'}
         syncLabel={syncLabel}
@@ -163,7 +163,7 @@ export default function App() {
         }}
         logoutLabel={sampleMode ? 'Exit sample' : 'Sign out'}
       />
-      <main className={`${isAnalysisRoute ? 'max-w-7xl' : 'max-w-xl'} mx-auto px-4 py-6`}>
+      <main className={`${isAnalysisRoute ? 'max-w-7xl' : 'max-w-xl'} w-full mx-auto px-4 py-6 flex-1`}>
         <Routes>
           <Route path="/" element={<CourtPage />} />
           <Route path="/leaderboard" element={<LeaderboardPage />} />
@@ -173,7 +173,7 @@ export default function App() {
           <Route path="/settings" element={<SettingsPage onLoadSampleData={() => void enterSampleMode()} />} />
         </Routes>
       </main>
-      <footer className="max-w-7xl mx-auto px-4 pb-6 text-xs text-gray-500">
+      <footer className="w-full px-4 pb-4 text-xs text-gray-500 text-center mt-auto">
         Version v{appVersion}
       </footer>
     </div>
