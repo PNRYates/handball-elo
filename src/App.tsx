@@ -145,6 +145,8 @@ export default function App() {
           : 'Synced';
   const isAnalysisRoute = location.pathname === '/analysis';
 
+  const appVersion = import.meta.env.VITE_APP_VERSION ?? 'dev';
+
   return (
     <div className="min-h-screen bg-gray-950 text-gray-100">
       <NavBar
@@ -171,6 +173,9 @@ export default function App() {
           <Route path="/settings" element={<SettingsPage onLoadSampleData={() => void enterSampleMode()} />} />
         </Routes>
       </main>
+      <footer className="max-w-7xl mx-auto px-4 pb-6 text-xs text-gray-500">
+        Version v{appVersion}
+      </footer>
     </div>
   );
 }

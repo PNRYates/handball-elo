@@ -214,6 +214,19 @@ Set:
 - `VITE_SUPABASE_ANON_KEY`
 - `VITE_USE_HASH_ROUTER=true` only if host cannot do SPA rewrites
 
+## Releases & Versioning
+
+- App version is shown in the website footer (`Version vX.Y.Z`) from `package.json`.
+- GitHub Releases are auto-created when a tag like `v1.2.3` is pushed.
+- Release notes are auto-generated on GitHub from merged PRs/commits.
+
+Create a new release:
+
+```bash
+npm run release:patch   # or release:minor / release:major
+git push origin main --follow-tags
+```
+
 ## Deployment
 
 ### Static hosting (recommended)
