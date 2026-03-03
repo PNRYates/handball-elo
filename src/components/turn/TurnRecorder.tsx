@@ -3,6 +3,7 @@ import { useGameStore } from '../../store/gameStore';
 import type { CourtPosition } from '../../types';
 import type { SelectionPhase } from '../court/CourtDisplay';
 import AutocompleteInput from './AutocompleteInput';
+import QuickSwapChips from './QuickSwapChips';
 
 interface Props {
   killerPos: CourtPosition | null;
@@ -17,6 +18,9 @@ interface Props {
   phase: SelectionPhase;
   inputRef: RefObject<HTMLInputElement | null>;
   reserves: string[];
+  recentEntrants: string[];
+  onQuickSwapPick: (name: string) => void;
+  showQuickSwap: boolean;
 }
 
 export default function TurnRecorder({
@@ -32,6 +36,9 @@ export default function TurnRecorder({
   phase,
   inputRef,
   reserves,
+  recentEntrants,
+  onQuickSwapPick,
+  showQuickSwap,
 }: Props) {
   const court = useGameStore((s) => s.court);
   const players = useGameStore((s) => s.players);
@@ -77,7 +84,15 @@ export default function TurnRecorder({
           <label className="block text-xs text-gray-500 mb-1">
             New player entering at #4
           </label>
-          <AutocompleteInput
+          {showQuickSwap && (
+            <QuickSwapChips
+              reserveNames={reserves.slice(0, 8)}
+              recentNames={recentEntrants.slice(0, 6)}
+              onPick={onQuickSwapPick}
+            />
+          )}
+          <div className="mt-2">
+            <AutocompleteInput
             value={newPlayerName}
             onChange={onNewPlayerNameChange}
             suggestions={reserves}
@@ -85,7 +100,8 @@ export default function TurnRecorder({
             onReset={onReset}
             canSubmit={canSubmit}
             inputRef={inputRef}
-          />
+            />
+          </div>
           {isReturningPlayer && !newPlayerOnCourt && (
             <p className="text-xs text-amber-400 mt-1">
               Returning player ({players[newPlayerName.trim().toLowerCase()].elo} ELO)

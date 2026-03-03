@@ -5,6 +5,7 @@ import type { SelectionPhase } from '../components/court/CourtDisplay';
 import InitialSetup from '../components/setup/InitialSetup';
 import CourtDisplay from '../components/court/CourtDisplay';
 import TurnRecorder from '../components/turn/TurnRecorder';
+import MobileSpeedPanel from '../components/court/MobileSpeedPanel';
 
 export default function CourtPage() {
   const requireKiller = useGameStore((s) => s.requireKiller);
@@ -15,12 +16,16 @@ export default function CourtPage() {
   const turnNumber = useGameStore((s) => s.turnNumber);
   const recordTurn = useGameStore((s) => s.recordTurn);
   const undoLastTurn = useGameStore((s) => s.undoLastTurn);
+  const redoLastTurn = useGameStore((s) => s.redoLastTurn);
   const endGame = useGameStore((s) => s.endGame);
-  const lastSnapshot = useGameStore((s) => s._lastSnapshot);
+  const undoStack = useGameStore((s) => s.undoStack);
+  const redoStack = useGameStore((s) => s.redoStack);
+  const recentEntrants = useGameStore((s) => s.recentEntrants);
 
   const [killerPos, setKillerPos] = useState<CourtPosition | null>(null);
   const [eliminatedPos, setEliminatedPos] = useState<CourtPosition | null>(null);
   const [newPlayerName, setNewPlayerName] = useState('');
+  const [isMobile, setIsMobile] = useState<boolean>(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Derived state
@@ -55,6 +60,23 @@ export default function CourtPage() {
     .filter((p) => !court.includes(p.id))
     .sort((a, b) => b.elo - a.elo)
     .map((p) => p.name);
+  const reserveSet = new Set(reserves.map((n) => n.toLowerCase()));
+  const recentEntrantNames = recentEntrants
+    .map((id) => players[id]?.name ?? id)
+    .filter((name) => {
+      const id = name.toLowerCase();
+      return !court.includes(id) && !reserveSet.has(id);
+    });
+  const canUndo = undoStack.length > 0;
+  const canRedo = redoStack.length > 0;
+
+  useEffect(() => {
+    const media = window.matchMedia('(max-width: 767px)');
+    const sync = () => setIsMobile(media.matches);
+    sync();
+    media.addEventListener('change', sync);
+    return () => media.removeEventListener('change', sync);
+  }, []);
 
   const resetSelection = useCallback(() => {
     setKillerPos(null);
@@ -107,6 +129,16 @@ export default function CourtPage() {
     [requireKiller, killerPos, eliminatedPos]
   );
 
+  const handleQuickSwapPick = useCallback(
+    (name: string) => {
+      setNewPlayerName(name);
+      queueMicrotask(() => {
+        handleConfirm(name);
+      });
+    },
+    [handleConfirm]
+  );
+
   // Global keyboard handler
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -143,6 +175,19 @@ export default function CourtPage() {
 
   return (
     <div className="space-y-4">
+      {isMobile && (
+        <MobileSpeedPanel
+          requireKiller={requireKiller}
+          killerPos={killerPos}
+          eliminatedPos={eliminatedPos}
+          canUndo={canUndo}
+          canRedo={canRedo}
+          onPickKiller={(pos) => setKillerPos(pos)}
+          onPickEliminated={handlePositionPress}
+          onUndo={undoLastTurn}
+          onRedo={redoLastTurn}
+        />
+      )}
       <CourtDisplay
         killerPos={requireKiller ? killerPos : null}
         eliminatedPos={eliminatedPos}
@@ -162,14 +207,25 @@ export default function CourtPage() {
         phase={phase}
         inputRef={inputRef}
         reserves={reserves}
+        recentEntrants={recentEntrantNames}
+        onQuickSwapPick={handleQuickSwapPick}
+        showQuickSwap={isMobile}
       />
-      <div className="flex gap-2">
-        {lastSnapshot && turns.length > 0 && (
+      <div className="hidden md:flex gap-2">
+        {canUndo && (
           <button
             onClick={undoLastTurn}
             className="flex-1 text-sm bg-gray-800 border border-gray-700 hover:border-gray-600 text-gray-400 py-2 rounded-lg transition-colors"
           >
             Undo Last Turn
+          </button>
+        )}
+        {canRedo && (
+          <button
+            onClick={redoLastTurn}
+            className="flex-1 text-sm bg-gray-800 border border-gray-700 hover:border-gray-600 text-gray-400 py-2 rounded-lg transition-colors"
+          >
+            Redo Turn
           </button>
         )}
         <button

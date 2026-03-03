@@ -1,6 +1,18 @@
 import { create } from 'zustand';
 import type { Player, Turn, CourtPosition, GameSnapshot, CompletedGame } from '../types';
-import { processTurn } from '../lib/gameEngine';
+import { processTurn } from '../lib/gameEngine.ts';
+
+const MAX_TURN_STACK = 100;
+const MAX_RECENT_ENTRANTS = 10;
+
+export interface TurnStateSnapshot {
+  players: Record<string, Player>;
+  court: [string, string, string, string];
+  turns: Turn[];
+  turnNumber: number;
+  _lastSnapshot: GameSnapshot | null;
+  recentEntrants: string[];
+}
 
 export interface PersistedGameState {
   players: Record<string, Player>;
@@ -14,6 +26,9 @@ export interface PersistedGameState {
   isInitialized: boolean;
   theme: 'dark' | 'light';
   requireKiller: boolean;
+  undoStack: TurnStateSnapshot[];
+  redoStack: TurnStateSnapshot[];
+  recentEntrants: string[];
 }
 
 interface GameStore extends PersistedGameState {
@@ -24,6 +39,7 @@ interface GameStore extends PersistedGameState {
     newPlayerName?: string
   ) => void;
   undoLastTurn: () => void;
+  redoLastTurn: () => void;
   endGame: () => void;
   resetAllData: () => void;
   deleteGameFromHistory: (gameId: number) => void;
@@ -46,6 +62,9 @@ function createInitialState(): PersistedGameState {
     isInitialized: false,
     theme: 'dark',
     requireKiller: true,
+    undoStack: [],
+    redoStack: [],
+    recentEntrants: [],
   };
 }
 
@@ -62,6 +81,9 @@ export function getPersistedGameState(state: PersistedGameState): PersistedGameS
     isInitialized: state.isInitialized,
     theme: state.theme,
     requireKiller: state.requireKiller,
+    undoStack: state.undoStack,
+    redoStack: state.redoStack,
+    recentEntrants: state.recentEntrants,
   };
 }
 
@@ -96,6 +118,15 @@ export function sanitizePersistedGameState(input: unknown): PersistedGameState {
   const theme = input.theme === 'light' ? 'light' : 'dark';
   const requireKiller =
     typeof input.requireKiller === 'boolean' ? input.requireKiller : fallback.requireKiller;
+  const undoStack = Array.isArray(input.undoStack)
+    ? (input.undoStack as TurnStateSnapshot[])
+    : fallback.undoStack;
+  const redoStack = Array.isArray(input.redoStack)
+    ? (input.redoStack as TurnStateSnapshot[])
+    : fallback.redoStack;
+  const recentEntrants = Array.isArray(input.recentEntrants)
+    ? (input.recentEntrants as string[])
+    : fallback.recentEntrants;
 
   return {
     players,
@@ -109,6 +140,26 @@ export function sanitizePersistedGameState(input: unknown): PersistedGameState {
     isInitialized,
     theme,
     requireKiller,
+    undoStack,
+    redoStack,
+    recentEntrants,
+  };
+}
+
+function createTurnStateSnapshot(state: PersistedGameState): TurnStateSnapshot {
+  return {
+    players: JSON.parse(JSON.stringify(state.players)),
+    court: [...state.court] as [string, string, string, string],
+    turns: JSON.parse(JSON.stringify(state.turns)),
+    turnNumber: state.turnNumber,
+    _lastSnapshot: state._lastSnapshot
+      ? {
+          players: JSON.parse(JSON.stringify(state._lastSnapshot.players)),
+          court: [...state._lastSnapshot.court] as [string, string, string, string],
+          turnNumber: state._lastSnapshot.turnNumber,
+        }
+      : null,
+    recentEntrants: [...state.recentEntrants],
   };
 }
 
@@ -154,6 +205,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
       gameStartedAt: Date.now(),
       isInitialized: true,
       _lastSnapshot: null,
+      undoStack: [],
+      redoStack: [],
     });
   },
 
@@ -165,6 +218,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       court: [...state.court] as [string, string, string, string],
       turnNumber: state.turnNumber,
     };
+    const turnStateSnapshot = createTurnStateSnapshot(state);
 
     const result = processTurn(
       state.court,
@@ -188,25 +242,60 @@ export const useGameStore = create<GameStore>((set, get) => ({
       eloChanges: result.eloChanges,
     };
 
+    const updatedRecentEntrants = result.newPlayer
+      ? [
+          result.newPlayer.id,
+          ...state.recentEntrants.filter((id) => id !== result.newPlayer?.id),
+        ].slice(0, MAX_RECENT_ENTRANTS)
+      : state.recentEntrants;
+
     set({
       court: result.newCourt,
       players: result.updatedPlayers,
       turns: [...state.turns, turn],
       turnNumber: state.turnNumber + 1,
       _lastSnapshot: snapshot,
+      undoStack: [...state.undoStack, turnStateSnapshot].slice(-MAX_TURN_STACK),
+      redoStack: [],
+      recentEntrants: updatedRecentEntrants,
     });
   },
 
   undoLastTurn: () => {
     const state = get();
-    if (state.turns.length === 0 || !state._lastSnapshot) return;
+    if (state.undoStack.length === 0) return;
+
+    const previous = state.undoStack[state.undoStack.length - 1];
+    const currentSnapshot = createTurnStateSnapshot(state);
 
     set({
-      court: state._lastSnapshot.court,
-      players: state._lastSnapshot.players,
-      turns: state.turns.slice(0, -1),
-      turnNumber: state._lastSnapshot.turnNumber,
-      _lastSnapshot: null,
+      players: previous.players,
+      court: previous.court,
+      turns: previous.turns,
+      turnNumber: previous.turnNumber,
+      _lastSnapshot: previous._lastSnapshot,
+      recentEntrants: previous.recentEntrants,
+      undoStack: state.undoStack.slice(0, -1),
+      redoStack: [...state.redoStack, currentSnapshot].slice(-MAX_TURN_STACK),
+    });
+  },
+
+  redoLastTurn: () => {
+    const state = get();
+    if (state.redoStack.length === 0) return;
+
+    const next = state.redoStack[state.redoStack.length - 1];
+    const currentSnapshot = createTurnStateSnapshot(state);
+
+    set({
+      players: next.players,
+      court: next.court,
+      turns: next.turns,
+      turnNumber: next.turnNumber,
+      _lastSnapshot: next._lastSnapshot,
+      recentEntrants: next.recentEntrants,
+      redoStack: state.redoStack.slice(0, -1),
+      undoStack: [...state.undoStack, currentSnapshot].slice(-MAX_TURN_STACK),
     });
   },
 
@@ -232,6 +321,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
       gameInProgress: false,
       gameStartedAt: null,
       _lastSnapshot: null,
+      undoStack: [],
+      redoStack: [],
       // players and isInitialized stay — ELOs persist
     });
   },
@@ -321,12 +412,53 @@ export const useGameStore = create<GameStore>((set, get) => ({
         }
       : null;
 
+    const mapTurnStateSnapshot = (snap: TurnStateSnapshot): TurnStateSnapshot => ({
+      ...snap,
+      players: Object.fromEntries(
+        Object.entries(snap.players).map(([k, v]) =>
+          k === oldId
+            ? [newId, { ...v, id: newId, name: trimmedName }]
+            : [k, v]
+        )
+      ),
+      court: mapCourt(snap.court),
+      turns: snap.turns.map((turn) => ({
+        ...turn,
+        eliminatedPlayerId: mapId(turn.eliminatedPlayerId),
+        killerPlayerId: mapId(turn.killerPlayerId),
+        newPlayerId: turn.newPlayerId ? mapId(turn.newPlayerId) : null,
+        courtBefore: mapCourt(turn.courtBefore),
+        courtAfter: mapCourt(turn.courtAfter),
+        eloChanges: turn.eloChanges.map((c) => ({
+          ...c,
+          playerId: mapId(c.playerId),
+        })),
+      })),
+      _lastSnapshot: snap._lastSnapshot
+        ? {
+            ...snap._lastSnapshot,
+            players: Object.fromEntries(
+              Object.entries(snap._lastSnapshot.players).map(([k, v]) =>
+                k === oldId
+                  ? [newId, { ...v, id: newId, name: trimmedName }]
+                  : [k, v]
+              )
+            ),
+            court: mapCourt(snap._lastSnapshot.court),
+          }
+        : null,
+      recentEntrants: snap.recentEntrants.map(mapId),
+    });
+
     set({
       players: updatedPlayers,
       court: newCourt,
       turns: newTurns,
       gameHistory: newGameHistory,
       _lastSnapshot: newSnapshot,
+      undoStack: state.undoStack.map(mapTurnStateSnapshot),
+      redoStack: state.redoStack.map(mapTurnStateSnapshot),
+      recentEntrants: state.recentEntrants.map(mapId),
     });
   },
 }));
