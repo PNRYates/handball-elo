@@ -167,7 +167,6 @@ Implemented in `src/lib/supabaseRest.ts`:
 Current user-facing settings include:
 - Light/dark theme
 - Require selecting killer
-- Show big turn buttons
 - Show reserve selection buttons
 
 ## Scripts
