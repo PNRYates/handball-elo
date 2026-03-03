@@ -35,6 +35,32 @@ function scopeLabel(scope: AnalyticsScope): string {
   return 'Game range';
 }
 
+function HelpTip({ text }: { text: string }) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <span className="relative inline-flex align-middle ml-1">
+      <button
+        type="button"
+        aria-label="More info"
+        title={text}
+        onMouseEnter={() => setOpen(true)}
+        onMouseLeave={() => setOpen(false)}
+        onBlur={() => setOpen(false)}
+        onClick={() => setOpen((v) => !v)}
+        className="w-4 h-4 rounded-full border border-gray-600 text-[10px] text-gray-400 inline-flex items-center justify-center"
+      >
+        ?
+      </button>
+      {open && (
+        <div className="absolute z-20 top-5 right-0 w-64 p-2 text-xs text-gray-200 bg-gray-900 border border-gray-700 rounded shadow-lg">
+          {text}
+        </div>
+      )}
+    </span>
+  );
+}
+
 function MiniBars({ values, labels }: { values: number[]; labels: string[] }) {
   const max = Math.max(...values, 1);
   return (
@@ -57,33 +83,116 @@ function LineChartCard({
   series,
   selected,
   players,
+  timeWindow,
+  onTimeWindowChange,
 }: {
   title: string;
-  series: Array<{ index: number; values: Record<string, number> }>;
+  series: Array<{ index: number; label: string; values: Record<string, number> }>;
   selected: string[];
   players: Record<string, { name: string }>;
+  timeWindow: 'all' | '50' | '20';
+  onTimeWindowChange: (next: 'all' | '50' | '20') => void;
 }) {
   const width = 900;
-  const height = 260;
-  const pad = 28;
+  const height = 280;
+  const padL = 52;
+  const padR = 20;
+  const padY = 24;
 
-  const allValues = selected.flatMap((id) => series.map((p) => p.values[id] ?? 0));
+  const displaySeries = useMemo(() => {
+    if (timeWindow === 'all') return series;
+    const n = Number(timeWindow);
+    return series.slice(-n);
+  }, [series, timeWindow]);
+
+  const allValues = selected.flatMap((id) => displaySeries.map((p) => p.values[id] ?? 0));
   const min = Math.min(...allValues, 0);
   const max = Math.max(...allValues, 0);
   const span = Math.max(1, max - min);
   const colors = ['#f59e0b', '#22c55e', '#3b82f6', '#ef4444', '#a78bfa', '#14b8a6'];
 
-  const toX = (idx: number) => pad + (idx / Math.max(1, series.length - 1)) * (width - pad * 2);
-  const toY = (v: number) => height - pad - ((v - min) / span) * (height - pad * 2);
+  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+
+  const toX = (idx: number) => {
+    const denom = Math.max(1, displaySeries.length - 1);
+    return padL + (idx / denom) * (width - padL - padR);
+  };
+  const toY = (v: number) => height - padY - ((v - min) / span) * (height - padY * 2);
+
+  const yTicks = useMemo(() => {
+    const count = 5;
+    return Array.from({ length: count }, (_, i) => min + (i / (count - 1)) * span);
+  }, [min, span]);
+
+  const syncHoverFromClientX = (clientX: number, target: SVGSVGElement) => {
+    const rect = target.getBoundingClientRect();
+    const localX = clientX - rect.left;
+    const usable = width - padL - padR;
+    const ratio = Math.max(0, Math.min(1, (localX - padL) / Math.max(1, usable)));
+    const idx = Math.round(ratio * Math.max(0, displaySeries.length - 1));
+    setHoveredIndex(idx);
+  };
+
+  const hoverPoint =
+    hoveredIndex !== null && hoveredIndex >= 0 && hoveredIndex < displaySeries.length
+      ? displaySeries[hoveredIndex]
+      : null;
 
   return (
     <section className="bg-gray-800 border border-gray-700 rounded-lg p-4 space-y-3">
-      <h2 className="font-medium">{title}</h2>
-      <div className="overflow-x-auto">
-        <svg viewBox={`0 0 ${width} ${height}`} className="min-w-[760px] w-full h-64 bg-gray-900 rounded">
-          <line x1={pad} y1={toY(0)} x2={width - pad} y2={toY(0)} stroke="#374151" strokeDasharray="4 4" />
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="font-medium">
+          {title}
+          <HelpTip text="Shows cumulative net Elo over time for selected players. Hover or tap the chart to inspect exact values at a turn." />
+        </h2>
+        <div className="flex gap-2">
+          {(['all', '50', '20'] as const).map((w) => (
+            <button
+              key={w}
+              type="button"
+              onClick={() => onTimeWindowChange(w)}
+              className={`text-xs px-2 py-1 rounded border ${
+                timeWindow === w
+                  ? 'bg-amber-600 border-amber-500 text-white'
+                  : 'bg-gray-900 border-gray-700 text-gray-300'
+              }`}
+            >
+              {w === 'all' ? 'All' : `Last ${w}`}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="overflow-x-auto relative">
+        <svg
+          viewBox={`0 0 ${width} ${height}`}
+          className="min-w-[760px] w-full h-72 bg-gray-900 rounded"
+          onMouseLeave={() => setHoveredIndex(null)}
+          onMouseMove={(e) => syncHoverFromClientX(e.clientX, e.currentTarget)}
+          onPointerMove={(e) => syncHoverFromClientX(e.clientX, e.currentTarget)}
+          onPointerDown={(e) => syncHoverFromClientX(e.clientX, e.currentTarget)}
+        >
+          {yTicks.map((tick) => (
+            <g key={tick}>
+              <line x1={padL} y1={toY(tick)} x2={width - padR} y2={toY(tick)} stroke="#374151" strokeDasharray="4 4" />
+              <text x={padL - 8} y={toY(tick) + 4} textAnchor="end" fontSize="10" fill="#9ca3af">
+                {tick.toFixed(0)}
+              </text>
+            </g>
+          ))}
+
+          <line x1={padL} y1={padY} x2={padL} y2={height - padY} stroke="#6b7280" />
+          <line x1={padL} y1={height - padY} x2={width - padR} y2={height - padY} stroke="#6b7280" />
+          <line x1={padL} y1={toY(0)} x2={width - padR} y2={toY(0)} stroke="#9ca3af" strokeDasharray="4 4" />
+          <text x={16} y={height / 2} transform={`rotate(-90 16 ${height / 2})`} fontSize="11" fill="#9ca3af">
+            Net Elo
+          </text>
+          <text x={width / 2} y={height - 4} textAnchor="middle" fontSize="11" fill="#9ca3af">
+            Turns
+          </text>
+
           {selected.map((id, lineIndex) => {
-            const points = series
+            const points = displaySeries
               .map((p, i) => `${toX(i)},${toY(p.values[id] ?? 0)}`)
               .join(' ');
             return (
@@ -96,8 +205,48 @@ function LineChartCard({
               />
             );
           })}
+
+          {hoverPoint && (
+            <line
+              x1={toX(hoveredIndex ?? 0)}
+              y1={padY}
+              x2={toX(hoveredIndex ?? 0)}
+              y2={height - padY}
+              stroke="#9ca3af"
+              strokeDasharray="3 3"
+            />
+          )}
+
+          {hoverPoint &&
+            selected.map((id, i) => (
+              <circle
+                key={`${id}-hover-point`}
+                cx={toX(hoveredIndex ?? 0)}
+                cy={toY(hoverPoint.values[id] ?? 0)}
+                r="3.5"
+                fill={colors[i % colors.length]}
+              />
+            ))}
         </svg>
+
+        {hoverPoint && (
+          <div className="absolute right-2 top-2 w-52 bg-gray-950/95 border border-gray-700 rounded p-2 text-xs">
+            <p className="text-gray-400 mb-1">{hoverPoint.label}</p>
+            <div className="space-y-1">
+              {selected.map((id, i) => (
+                <div key={`${id}-tip`} className="flex justify-between gap-2">
+                  <span className="inline-flex items-center gap-1 truncate">
+                    <span className="w-2 h-2 rounded-full" style={{ background: colors[i % colors.length] }} />
+                    {players[id]?.name ?? id}
+                  </span>
+                  <span className="font-mono">{(hoverPoint.values[id] ?? 0).toFixed(1)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
+
       <div className="flex flex-wrap gap-2 text-xs">
         {selected.map((id, i) => (
           <span key={id} className="px-2 py-1 rounded bg-gray-900 border border-gray-700 inline-flex items-center gap-2">
@@ -110,6 +259,15 @@ function LineChartCard({
   );
 }
 
+function Th({ label, help }: { label: string; help: string }) {
+  return (
+    <th className="py-1.5 pr-2">
+      {label}
+      <HelpTip text={help} />
+    </th>
+  );
+}
+
 export default function AnalysisPage() {
   const turns = useGameStore((s) => s.turns);
   const gameHistory = useGameStore((s) => s.gameHistory);
@@ -118,6 +276,7 @@ export default function AnalysisPage() {
   const [filter, setFilter] = useState<AnalyticsFilterState>(defaultFilter);
   const [selectedPlayers, setSelectedPlayers] = useState<string[]>([]);
   const [h2hSort, setH2hSort] = useState<'volume' | 'net' | 'ratio'>('volume');
+  const [trendWindow, setTrendWindow] = useState<'all' | '50' | '20'>('all');
 
   const filtered = useMemo(
     () => getFilteredTurns(turns, gameHistory, filter),
@@ -162,7 +321,10 @@ export default function AnalysisPage() {
       </div>
 
       <section className="bg-gray-800 border border-gray-700 rounded-lg p-4 space-y-3">
-        <h2 className="font-medium">Filters</h2>
+        <h2 className="font-medium">
+          Filters
+          <HelpTip text="Adjust the analysis dataset. These controls do not change gameplay data, they only change what is included in charts and tables." />
+        </h2>
         <div className="flex flex-wrap gap-2">
           {(['all_time', 'current_game', 'last_5_games', 'last_10_games', 'game_range'] as AnalyticsScope[]).map((scope) => (
             <button
@@ -187,6 +349,7 @@ export default function AnalysisPage() {
               onChange={(e) => setFilter((f) => ({ ...f, includeCurrentGame: e.target.checked }))}
             />
             Include current game
+            <HelpTip text="If checked, analytics include in-progress turns from the active game." />
           </label>
           <label className="inline-flex items-center gap-2">
             Min turns
@@ -197,6 +360,7 @@ export default function AnalysisPage() {
               value={filter.minTurnsThreshold}
               onChange={(e) => setFilter((f) => ({ ...f, minTurnsThreshold: Number(e.target.value) || 1 }))}
             />
+            <HelpTip text="Head-to-head rows with fewer shared turns than this threshold are hidden." />
           </label>
           {filter.scope === 'game_range' && (
             <>
@@ -225,25 +389,28 @@ export default function AnalysisPage() {
 
       <section className="grid grid-cols-2 md:grid-cols-4 gap-2">
         <div className="bg-gray-800 border border-gray-700 rounded-lg p-3">
-          <p className="text-xs text-gray-500">Turns</p>
+          <p className="text-xs text-gray-500">Turns<HelpTip text="Total turns in the currently selected analytics filter window." /></p>
           <p className="font-mono text-xl">{summary.totalTurns}</p>
         </div>
         <div className="bg-gray-800 border border-gray-700 rounded-lg p-3">
-          <p className="text-xs text-gray-500">Players</p>
+          <p className="text-xs text-gray-500">Players<HelpTip text="Unique players present in filtered turns." /></p>
           <p className="font-mono text-xl">{summary.uniquePlayers}</p>
         </div>
         <div className="bg-gray-800 border border-gray-700 rounded-lg p-3">
-          <p className="text-xs text-gray-500">Games</p>
+          <p className="text-xs text-gray-500">Games<HelpTip text="Number of games represented by filtered turns." /></p>
           <p className="font-mono text-xl">{summary.totalGamesRepresented}</p>
         </div>
         <div className="bg-gray-800 border border-gray-700 rounded-lg p-3">
-          <p className="text-xs text-gray-500">Avg turns/game</p>
+          <p className="text-xs text-gray-500">Avg turns/game<HelpTip text="Average number of turns per represented game in the active filter." /></p>
           <p className="font-mono text-xl">{summary.avgTurnsPerGame}</p>
         </div>
       </section>
 
       <section className="bg-gray-800 border border-gray-700 rounded-lg p-4 space-y-3">
-        <h2 className="font-medium">Selected Players</h2>
+        <h2 className="font-medium">
+          Selected Players
+          <HelpTip text="Select which players appear in the Performance Trends chart. Defaults to most active players." />
+        </h2>
         <div className="flex flex-wrap gap-2">
           {Object.values(players)
             .sort((a, b) => b.elo - a.elo)
@@ -270,23 +437,28 @@ export default function AnalysisPage() {
       </section>
 
       <LineChartCard
-        title="Performance Trends (Net Elo in Filter Window)"
+        title="Performance Trends (Net Elo)"
         series={trends.series}
         selected={selectedPlayers}
         players={players}
+        timeWindow={trendWindow}
+        onTimeWindowChange={setTrendWindow}
       />
 
       <section className="bg-gray-800 border border-gray-700 rounded-lg p-4">
-        <h2 className="font-medium mb-3">Form (Last 10/20 Turns)</h2>
+        <h2 className="font-medium mb-3">
+          Form (Last 10/20 Turns)
+          <HelpTip text="Short-window performance view to spot who is currently climbing or sliding." />
+        </h2>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-gray-500 border-b border-gray-700">
-                <th className="py-1.5 pr-2">Player</th>
-                <th className="py-1.5 pr-2">Net 10</th>
-                <th className="py-1.5 pr-2">Net 20</th>
-                <th className="py-1.5 pr-2">Kill Rate 10</th>
-                <th className="py-1.5 pr-2">Momentum</th>
+                <Th label="Player" help="Player identity for this row." />
+                <Th label="Net 10" help="Net Elo change for this player across their last 10 filtered turns." />
+                <Th label="Net 20" help="Net Elo change for this player across their last 20 filtered turns." />
+                <Th label="Kill Rate 10" help="Kills divided by turns played in the last 10 turns." />
+                <Th label="Momentum" help="Average Elo delta per recent turn (Net 10 / 10)." />
               </tr>
             </thead>
             <tbody>
@@ -306,7 +478,10 @@ export default function AnalysisPage() {
 
       <section className="bg-gray-800 border border-gray-700 rounded-lg p-4 space-y-3">
         <div className="flex items-center justify-between">
-          <h2 className="font-medium">Head-to-Head Intelligence</h2>
+          <h2 className="font-medium">
+            Head-to-Head Intelligence
+            <HelpTip text="Pairwise matchup outcomes across turns where both players were on court." />
+          </h2>
           <div className="flex gap-2 text-xs">
             <button type="button" onClick={() => setH2hSort('volume')} className="px-2 py-1 border border-gray-700 rounded bg-gray-900">Volume</button>
             <button type="button" onClick={() => setH2hSort('net')} className="px-2 py-1 border border-gray-700 rounded bg-gray-900">Net</button>
@@ -318,16 +493,20 @@ export default function AnalysisPage() {
           values={top.map((r) => r.turnsTogether)}
           labels={top.map((r) => `${r.playerAName} vs ${r.playerBName}`)}
         />
+        <p className="text-xs text-gray-500">
+          Top rivalries by shared turns
+          <HelpTip text="Quick view of most frequent matchups in the current filter. Use the table below for detailed kill and Elo breakdowns." />
+        </p>
 
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-gray-500 border-b border-gray-700">
-                <th className="py-1.5 pr-2">Matchup</th>
-                <th className="py-1.5 pr-2">Turns</th>
-                <th className="py-1.5 pr-2">Kills A-B</th>
-                <th className="py-1.5 pr-2">Kill Ratio A</th>
-                <th className="py-1.5 pr-2">Net Elo A-B</th>
+                <Th label="Matchup" help="Player pair compared in this head-to-head row." />
+                <Th label="Turns" help="How many turns both players shared court time." />
+                <Th label="Kills A-B" help="Direct eliminations: player A on player B and vice versa." />
+                <Th label="Kill Ratio A" help="Kills by player A divided by kills by player B (smoothed when denominator is zero)." />
+                <Th label="Net Elo A-B" help="Net Elo differential between A and B during shared turns." />
               </tr>
             </thead>
             <tbody>
@@ -346,17 +525,20 @@ export default function AnalysisPage() {
       </section>
 
       <section className="bg-gray-800 border border-gray-700 rounded-lg p-4 space-y-3">
-        <h2 className="font-medium">Position Strategy</h2>
+        <h2 className="font-medium">
+          Position Strategy
+          <HelpTip text="Square-level risk/reward and rotation impact based on filtered turn data." />
+        </h2>
         <div className="grid md:grid-cols-2 gap-4">
           <div>
-            <h3 className="text-sm text-gray-400 mb-2">Elimination Rate by Square</h3>
+            <h3 className="text-sm text-gray-400 mb-2">Elimination Rate by Square<HelpTip text="How often each square was the eliminated position." /></h3>
             <MiniBars
               values={strategy.eliminationByPosition.map((r) => r.count)}
               labels={strategy.eliminationByPosition.map((r) => `#${r.position + 1}`)}
             />
           </div>
           <div>
-            <h3 className="text-sm text-gray-400 mb-2">Kill Conversion by Square</h3>
+            <h3 className="text-sm text-gray-400 mb-2">Kill Conversion by Square<HelpTip text="How many kills originated from each square." /></h3>
             <MiniBars
               values={strategy.killsByPosition.map((r) => r.count)}
               labels={strategy.killsByPosition.map((r) => `#${r.position + 1}`)}
@@ -366,22 +548,22 @@ export default function AnalysisPage() {
 
         <div className="grid md:grid-cols-2 gap-3 text-sm">
           <div className="border border-gray-700 rounded-lg p-3">
-            <p className="text-gray-500 text-xs mb-1">Safe Square</p>
+            <p className="text-gray-500 text-xs mb-1">Safe Square<HelpTip text="Square with lowest elimination rate in current filter window." /></p>
             <p className="font-semibold">#{strategy.safeSquare + 1}</p>
           </div>
           <div className="border border-gray-700 rounded-lg p-3">
-            <p className="text-gray-500 text-xs mb-1">Pressure Square</p>
+            <p className="text-gray-500 text-xs mb-1">Pressure Square<HelpTip text="Square with highest elimination rate in current filter window." /></p>
             <p className="font-semibold">#{strategy.pressureSquare + 1}</p>
           </div>
           <div className="border border-gray-700 rounded-lg p-3">
-            <p className="text-gray-500 text-xs mb-1">Entry Impact (first 3 turns)</p>
+            <p className="text-gray-500 text-xs mb-1">Entry Impact (first 3 turns)<HelpTip text="Average net Elo across a player's first 3 turns after entering at #4." /></p>
             <p className={`font-semibold ${statClass(strategy.entryImpact.averageThreeTurnNet)}`}>
               {strategy.entryImpact.averageThreeTurnNet}
             </p>
             <p className="text-xs text-gray-500 mt-1">{strategy.entryImpact.entries} entries sampled</p>
           </div>
           <div className="border border-gray-700 rounded-lg p-3">
-            <p className="text-gray-500 text-xs mb-1">Rotation Efficiency (avg Elo delta)</p>
+            <p className="text-gray-500 text-xs mb-1">Rotation Efficiency (avg Elo delta)<HelpTip text="Average turn-by-turn Elo delta for players occupying each square." /></p>
             <div className="text-xs space-y-1 mt-1">
               {strategy.rotationEfficiency.map((r) => (
                 <div key={r.position} className="flex justify-between">
@@ -395,14 +577,17 @@ export default function AnalysisPage() {
       </section>
 
       <section className="bg-gray-800 border border-gray-700 rounded-lg p-4">
-        <h2 className="font-medium mb-3">Volatility</h2>
+        <h2 className="font-medium mb-3">
+          Volatility
+          <HelpTip text="Shows consistency by player. Higher volatility means wider swing between good and bad turns." />
+        </h2>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-gray-500 border-b border-gray-700">
-                <th className="py-1.5 pr-2">Player</th>
-                <th className="py-1.5 pr-2">Volatility</th>
-                <th className="py-1.5 pr-2">Avg Delta/Turn</th>
+                <Th label="Player" help="Player identity for this volatility row." />
+                <Th label="Volatility" help="Standard deviation of non-zero turn deltas; higher means less stable results." />
+                <Th label="Avg Delta/Turn" help="Average non-zero Elo delta per turn for this player." />
               </tr>
             </thead>
             <tbody>
