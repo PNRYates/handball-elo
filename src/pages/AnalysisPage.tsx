@@ -85,9 +85,7 @@ function InlineExplain({
     };
 
     const handleEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        setOpen(false);
-      }
+      if (event.key === 'Escape') setOpen(false);
     };
 
     const rafId = window.requestAnimationFrame(updatePosition);
@@ -116,7 +114,7 @@ function InlineExplain({
         onMouseLeave={() => setOpen(false)}
         onFocus={() => setOpen(true)}
         onBlur={() => setOpen(false)}
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => setOpen(true)}
         className={`inline text-inherit underline decoration-dotted underline-offset-4 decoration-gray-500 hover:decoration-gray-300 ${className ?? ''}`}
       >
         {label}
@@ -151,6 +149,10 @@ function MiniBars({ values, labels }: { values: number[]; labels: string[] }) {
       ))}
     </div>
   );
+}
+
+function getTableMaxHeight(limit: number): number {
+  return 42 + limit * 34;
 }
 
 function LineChartCard({
@@ -191,6 +193,7 @@ function LineChartCard({
   const colors = ['#f59e0b', '#22c55e', '#3b82f6', '#ef4444', '#a78bfa', '#14b8a6'];
 
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+  const [hoverPointPx, setHoverPointPx] = useState<{ x: number; y: number } | null>(null);
 
   useEffect(() => {
     const node = chartContainerRef.current;
@@ -223,19 +226,30 @@ function LineChartCard({
     return Array.from({ length: count }, (_, i) => min + (i / (count - 1)) * span);
   }, [min, span]);
 
-  const syncHoverFromClientX = (clientX: number, target: SVGSVGElement) => {
+  const syncHoverFromPoint = (clientX: number, clientY: number, target: SVGSVGElement) => {
     const rect = target.getBoundingClientRect();
     const localX = clientX - rect.left;
+    const localY = clientY - rect.top;
     const usable = chartWidth - padL - padR;
     const ratio = Math.max(0, Math.min(1, (localX - padL) / Math.max(1, usable)));
     const idx = Math.round(ratio * Math.max(0, displaySeries.length - 1));
     setHoveredIndex(idx);
+    setHoverPointPx({ x: Math.max(8, localX), y: Math.max(8, localY) });
   };
 
   const hoverPoint =
     hoveredIndex !== null && hoveredIndex >= 0 && hoveredIndex < displaySeries.length
       ? displaySeries[hoveredIndex]
       : null;
+
+  const tooltipWidth = 220;
+  const tooltipHeight = 120;
+  const tooltipLeft = hoverPointPx
+    ? Math.min(Math.max(8, hoverPointPx.x + 14), Math.max(8, chartWidth - tooltipWidth - 8))
+    : 8;
+  const tooltipTop = hoverPointPx
+    ? Math.min(Math.max(8, hoverPointPx.y + 14), Math.max(8, height - tooltipHeight - 8))
+    : 8;
 
   return (
     <section className="bg-gray-800 border border-gray-700 rounded-lg p-4 space-y-3">
@@ -264,15 +278,18 @@ function LineChartCard({
       <div
         ref={chartContainerRef}
         className="overflow-x-auto relative"
-        onMouseLeave={() => setHoveredIndex(null)}
+        onMouseLeave={() => {
+          setHoveredIndex(null);
+          setHoverPointPx(null);
+        }}
       >
         <svg
           viewBox={`0 0 ${chartWidth} ${height}`}
           className="h-72 block"
           style={{ width: chartWidth }}
-          onMouseMove={(e) => syncHoverFromClientX(e.clientX, e.currentTarget)}
-          onPointerMove={(e) => syncHoverFromClientX(e.clientX, e.currentTarget)}
-          onPointerDown={(e) => syncHoverFromClientX(e.clientX, e.currentTarget)}
+          onMouseMove={(e) => syncHoverFromPoint(e.clientX, e.clientY, e.currentTarget)}
+          onPointerMove={(e) => syncHoverFromPoint(e.clientX, e.clientY, e.currentTarget)}
+          onPointerDown={(e) => syncHoverFromPoint(e.clientX, e.clientY, e.currentTarget)}
         >
           <rect x={0} y={0} width={chartWidth} height={height} fill="#111827" rx={8} />
 
@@ -334,7 +351,10 @@ function LineChartCard({
         </svg>
 
         {hoverPoint && (
-          <div className="absolute right-2 top-2 w-52 bg-gray-950/95 border border-gray-700 rounded p-2 text-xs pointer-events-none">
+          <div
+            className="absolute bg-gray-950/95 border border-gray-700 rounded p-2 text-xs pointer-events-none"
+            style={{ width: tooltipWidth, left: tooltipLeft, top: tooltipTop }}
+          >
             <p className="text-gray-400 mb-1">{hoverPoint.label}</p>
             <div className="space-y-1">
               {selected.map((id, i) => (
@@ -380,6 +400,8 @@ export default function AnalysisPage() {
   const [selectedPlayers, setSelectedPlayers] = useState<string[]>([]);
   const [h2hSort, setH2hSort] = useState<'volume' | 'net' | 'ratio'>('volume');
   const [trendWindow, setTrendWindow] = useState<'all' | '50' | '20'>('all');
+  const [tableRowsVisible, setTableRowsVisible] = useState(12);
+  const [h2hRowsVisible, setH2hRowsVisible] = useState(20);
 
   const filtered = useMemo(
     () => getFilteredTurns(turns, gameHistory, filter),
@@ -411,6 +433,27 @@ export default function AnalysisPage() {
   }, [h2h, h2hSort]);
 
   const top = topRivalries(h2h, 8);
+
+  const volatilityById = useMemo(() => {
+    const map = new Map<string, { volatility: number; averageDelta: number }>();
+    for (const row of trends.volatility) {
+      map.set(row.playerId, { volatility: row.volatility, averageDelta: row.averageDelta });
+    }
+    return map;
+  }, [trends.volatility]);
+
+  const combinedRows = useMemo(
+    () =>
+      trends.formMetrics.map((row) => {
+        const vol = volatilityById.get(row.playerId);
+        return {
+          ...row,
+          volatility: vol?.volatility ?? 0,
+          avgDelta: vol?.averageDelta ?? 0,
+        };
+      }),
+    [trends.formMetrics, volatilityById]
+  );
 
   if (filtered.length === 0) {
     return <p className="text-gray-500 text-center mt-12">No analysis yet for selected filter.</p>;
@@ -565,41 +608,63 @@ export default function AnalysisPage() {
         onTimeWindowChange={setTrendWindow}
       />
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-6 items-start">
-        <section className="bg-gray-800 border border-gray-700 rounded-lg p-4 2xl:col-span-1">
-          <h2 className="font-medium mb-3">
+      <section className="bg-gray-800 border border-gray-700 rounded-lg p-4 space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="font-medium">
             <InlineExplain
-              label="Form (Last 10/20 Turns)"
-              text="Short-window performance view to spot who is currently climbing or sliding."
+              label="Form + Volatility"
+              text="Combines short-term performance and consistency metrics in one view."
             />
           </h2>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left text-gray-500 border-b border-gray-700">
-                  <Th label="Player" help="Player identity for this row." />
-                  <Th label="Net 10" help="Net Elo change for this player across their last 10 filtered turns." />
-                  <Th label="Net 20" help="Net Elo change for this player across their last 20 filtered turns." />
-                  <Th label="Kill Rate 10" help="Kills divided by turns played in the last 10 turns." />
-                  <Th label="Momentum" help="Average Elo delta per recent turn (Net 10 / 10)." />
-                </tr>
-              </thead>
-              <tbody>
-                {trends.formMetrics.slice(0, 12).map((p) => (
-                  <tr key={p.playerId} className="border-b border-gray-800 last:border-b-0">
-                    <td className="py-1.5 pr-2 font-medium">{p.playerName}</td>
-                    <td className={`py-1.5 pr-2 font-mono ${statClass(p.netElo10)}`}>{p.netElo10}</td>
-                    <td className={`py-1.5 pr-2 font-mono ${statClass(p.netElo20)}`}>{p.netElo20}</td>
-                    <td className="py-1.5 pr-2 font-mono">{pct(p.killRate10)}</td>
-                    <td className={`py-1.5 pr-2 font-mono ${statClass(p.momentum10)}`}>{p.momentum10.toFixed(2)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
+          <label className="text-xs flex items-center gap-2">
+            <span className="text-gray-400">Visible rows before scroll</span>
+            <select
+              value={tableRowsVisible}
+              onChange={(e) => setTableRowsVisible(Number(e.target.value))}
+              className="bg-gray-900 border border-gray-700 rounded px-2 py-1"
+            >
+              {[8, 12, 20, 40].map((n) => (
+                <option key={n} value={n}>{n}</option>
+              ))}
+            </select>
+          </label>
+        </div>
 
-        <section className="bg-gray-800 border border-gray-700 rounded-lg p-4 space-y-3 2xl:col-span-2">
+        <div
+          className={`overflow-x-auto ${combinedRows.length > tableRowsVisible ? 'overflow-y-auto' : ''}`}
+          style={combinedRows.length > tableRowsVisible ? { maxHeight: getTableMaxHeight(tableRowsVisible) } : undefined}
+        >
+          <table className="w-full text-sm">
+            <thead className="sticky top-0 bg-gray-800">
+              <tr className="text-left text-gray-500 border-b border-gray-700">
+                <Th label="Player" help="Player identity for this row." />
+                <Th label="Net 10" help="Net Elo change for this player across their last 10 filtered turns." />
+                <Th label="Net 20" help="Net Elo change for this player across their last 20 filtered turns." />
+                <Th label="Kill Rate 10" help="Kills divided by turns played in the last 10 turns." />
+                <Th label="Momentum" help="Average Elo delta per recent turn (Net 10 / 10)." />
+                <Th label="Volatility" help="Standard deviation of non-zero turn deltas; higher means less stable results." />
+                <Th label="Avg Delta/Turn" help="Average non-zero Elo delta per turn for this player." />
+              </tr>
+            </thead>
+            <tbody>
+              {combinedRows.map((row) => (
+                <tr key={row.playerId} className="border-b border-gray-800 last:border-b-0">
+                  <td className="py-1.5 pr-2 font-medium">{row.playerName}</td>
+                  <td className={`py-1.5 pr-2 font-mono ${statClass(row.netElo10)}`}>{row.netElo10}</td>
+                  <td className={`py-1.5 pr-2 font-mono ${statClass(row.netElo20)}`}>{row.netElo20}</td>
+                  <td className="py-1.5 pr-2 font-mono">{pct(row.killRate10)}</td>
+                  <td className={`py-1.5 pr-2 font-mono ${statClass(row.momentum10)}`}>{row.momentum10.toFixed(2)}</td>
+                  <td className="py-1.5 pr-2 font-mono">{row.volatility.toFixed(2)}</td>
+                  <td className={`py-1.5 pr-2 font-mono ${statClass(row.avgDelta)}`}>{row.avgDelta.toFixed(2)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+        <section className="bg-gray-800 border border-gray-700 rounded-lg p-4 space-y-3">
           <div className="flex items-center justify-between gap-2">
             <h2 className="font-medium">
               <InlineExplain
@@ -630,16 +695,28 @@ export default function AnalysisPage() {
             values={top.map((r) => r.turnsTogether)}
             labels={top.map((r) => `${r.playerAName} vs ${r.playerBName}`)}
           />
-          <p className="text-xs text-gray-500">
-            <InlineExplain
-              label="Top rivalries by shared turns"
-              text="Quick view of most frequent matchups in the current filter. Use the table below for detailed kill and Elo breakdowns."
-            />
-          </p>
 
-          <div className="overflow-x-auto">
+          <div className="flex justify-end">
+            <label className="text-xs flex items-center gap-2">
+              <span className="text-gray-400">Visible rows before scroll</span>
+              <select
+                value={h2hRowsVisible}
+                onChange={(e) => setH2hRowsVisible(Number(e.target.value))}
+                className="bg-gray-900 border border-gray-700 rounded px-2 py-1"
+              >
+                {[10, 20, 40, 80].map((n) => (
+                  <option key={n} value={n}>{n}</option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          <div
+            className={`overflow-x-auto ${sortedH2h.length > h2hRowsVisible ? 'overflow-y-auto' : ''}`}
+            style={sortedH2h.length > h2hRowsVisible ? { maxHeight: getTableMaxHeight(h2hRowsVisible) } : undefined}
+          >
             <table className="w-full text-sm">
-              <thead>
+              <thead className="sticky top-0 bg-gray-800">
                 <tr className="text-left text-gray-500 border-b border-gray-700">
                   <Th label="Matchup" help="Player pair compared in this head-to-head row." />
                   <Th label="Turns" help="How many turns both players shared court time." />
@@ -649,7 +726,7 @@ export default function AnalysisPage() {
                 </tr>
               </thead>
               <tbody>
-                {sortedH2h.slice(0, 20).map((row: HeadToHeadRow) => (
+                {sortedH2h.map((row: HeadToHeadRow) => (
                   <tr key={row.pairKey} className="border-b border-gray-800 last:border-b-0">
                     <td className="py-1.5 pr-2">{row.playerAName} vs {row.playerBName}</td>
                     <td className="py-1.5 pr-2 font-mono">{row.turnsTogether}</td>
@@ -663,7 +740,7 @@ export default function AnalysisPage() {
           </div>
         </section>
 
-        <section className="bg-gray-800 border border-gray-700 rounded-lg p-4 space-y-3 2xl:col-span-2">
+        <section className="bg-gray-800 border border-gray-700 rounded-lg p-4 space-y-3">
           <h2 className="font-medium">
             <InlineExplain
               label="Position Strategy"
@@ -732,35 +809,6 @@ export default function AnalysisPage() {
                 ))}
               </div>
             </div>
-          </div>
-        </section>
-
-        <section className="bg-gray-800 border border-gray-700 rounded-lg p-4 2xl:col-span-1">
-          <h2 className="font-medium mb-3">
-            <InlineExplain
-              label="Volatility"
-              text="Shows consistency by player. Higher volatility means wider swing between good and bad turns."
-            />
-          </h2>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left text-gray-500 border-b border-gray-700">
-                  <Th label="Player" help="Player identity for this volatility row." />
-                  <Th label="Volatility" help="Standard deviation of non-zero turn deltas; higher means less stable results." />
-                  <Th label="Avg Delta/Turn" help="Average non-zero Elo delta per turn for this player." />
-                </tr>
-              </thead>
-              <tbody>
-                {trends.volatility.slice(0, 12).map((row) => (
-                  <tr key={row.playerId} className="border-b border-gray-800 last:border-b-0">
-                    <td className="py-1.5 pr-2">{row.playerName}</td>
-                    <td className="py-1.5 pr-2 font-mono">{row.volatility.toFixed(2)}</td>
-                    <td className={`py-1.5 pr-2 font-mono ${statClass(row.averageDelta)}`}>{row.averageDelta.toFixed(2)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
           </div>
         </section>
       </div>

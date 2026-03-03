@@ -32,3 +32,13 @@ test('computePopoverPosition prefers bottom placement when there is room', () =>
 
   assert.equal(position.placement, 'bottom');
 });
+
+test('computePopoverPosition never returns negative left on narrow viewport', () => {
+  const position = computePopoverPosition(
+    { left: 20, top: 120, width: 40, height: 24 },
+    { width: 320, height: 100 },
+    { width: 320, height: 640 }
+  );
+
+  assert.equal(position.left >= 12, true);
+});

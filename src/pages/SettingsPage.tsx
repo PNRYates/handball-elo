@@ -1,6 +1,10 @@
 import { useGameStore } from '../store/gameStore';
 
-export default function SettingsPage() {
+interface SettingsPageProps {
+  onLoadSampleData?: () => void;
+}
+
+export default function SettingsPage({ onLoadSampleData }: SettingsPageProps) {
   const theme = useGameStore((s) => s.theme);
   const requireKiller = useGameStore((s) => s.requireKiller);
   const showBigTurnButtons = useGameStore((s) => s.showBigTurnButtons);
@@ -119,6 +123,22 @@ export default function SettingsPage() {
         <p className="text-xs text-gray-500">
           Shows quick-tap reserve and recent entrant chips during replacement entry.
         </p>
+      </section>
+
+      <section className="bg-gray-800 border border-gray-700 rounded-lg p-4 space-y-3">
+        <div>
+          <h2 className="font-medium">Sample Dataset</h2>
+          <p className="text-xs text-gray-500 mt-0.5">
+            Load a pre-built sample history so you can explore charts and stats quickly.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => onLoadSampleData?.()}
+          className="px-3 py-2 rounded-lg border text-sm bg-gray-900 border-gray-700 text-gray-300 hover:border-gray-500 transition-colors"
+        >
+          Switch to sample data
+        </button>
       </section>
     </div>
   );

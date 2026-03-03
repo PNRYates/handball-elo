@@ -13,9 +13,10 @@ interface NavBarProps {
   userEmail: string;
   syncLabel: string;
   onLogout: () => void;
+  logoutLabel?: string;
 }
 
-export default function NavBar({ userEmail, syncLabel, onLogout }: NavBarProps) {
+export default function NavBar({ userEmail, syncLabel, onLogout, logoutLabel = 'Sign out' }: NavBarProps) {
   return (
     <nav className="bg-gray-900 border-b border-gray-800">
       <div className="max-w-xl mx-auto px-4 py-2 flex items-center justify-between gap-3">
@@ -28,7 +29,7 @@ export default function NavBar({ userEmail, syncLabel, onLogout }: NavBarProps) 
           onClick={onLogout}
           className="text-xs text-gray-400 hover:text-gray-200 border border-gray-700 hover:border-gray-500 rounded px-2 py-1 transition-colors"
         >
-          Sign out
+          {logoutLabel}
         </button>
       </div>
       <div className="max-w-xl mx-auto flex overflow-x-auto">

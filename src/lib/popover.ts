@@ -23,9 +23,10 @@ export function computePopoverPosition(
   padding = 12,
   gap = 8
 ): PopoverPosition {
+  const maxLeft = Math.max(padding, viewport.width - popover.width - padding);
   const clampedLeft = Math.min(
     Math.max(padding, anchor.left + anchor.width / 2 - popover.width / 2),
-    viewport.width - popover.width - padding
+    maxLeft
   );
 
   const bottomTop = anchor.top + anchor.height + gap;
