@@ -17,8 +17,11 @@ import {
 } from './lib/supabaseRest';
 import { useRemoteSync } from './lib/useRemoteSync';
 import { useGameStore } from './store/gameStore';
+import { buildSampleState } from './lib/sampleData';
 
-function LoginView({ error }: { error: string | null }) {
+const SAMPLE_MODE_KEY = 'handball-elo-sample-mode';
+
+function LoginView({ error, onUseSample }: { error: string | null; onUseSample: () => void }) {
   return (
     <div className="min-h-screen bg-gray-950 text-gray-100 flex items-center justify-center px-4">
       <div className="w-full max-w-sm rounded-xl border border-gray-800 bg-gray-900 p-6">
@@ -32,6 +35,13 @@ function LoginView({ error }: { error: string | null }) {
         >
           Continue with Google
         </button>
+        <button
+          type="button"
+          onClick={onUseSample}
+          className="w-full mt-2 bg-gray-800 hover:bg-gray-700 text-gray-200 font-medium py-2.5 rounded-lg transition-colors border border-gray-700"
+        >
+          Explore sample data
+        </button>
       </div>
     </div>
   );
@@ -40,12 +50,40 @@ function LoginView({ error }: { error: string | null }) {
 export default function App() {
   const location = useLocation();
   const theme = useGameStore((s) => s.theme);
+  const resetAllData = useGameStore((s) => s.resetAllData);
+  const hydrateFromRemote = useGameStore((s) => s.hydrateFromRemote);
   const [authLoading, setAuthLoading] = useState(true);
   const [authError, setAuthError] = useState<string | null>(null);
   const [session, setSession] = useState<SupabaseSession | null>(null);
   const [user, setUser] = useState<SupabaseUser | null>(null);
+  const [sampleMode, setSampleMode] = useState<boolean>(() => localStorage.getItem(SAMPLE_MODE_KEY) === 'true');
+
+  const enterSampleMode = useCallback(async () => {
+    if (session) {
+      await logout(session);
+    }
+    localStorage.setItem(SAMPLE_MODE_KEY, 'true');
+    setSession(null);
+    setUser(null);
+    setSampleMode(true);
+    hydrateFromRemote(buildSampleState());
+    setAuthLoading(false);
+  }, [hydrateFromRemote, session]);
+
+  const exitSampleMode = useCallback(() => {
+    localStorage.removeItem(SAMPLE_MODE_KEY);
+    setSampleMode(false);
+    resetAllData();
+    setSession(null);
+    setUser(null);
+    setAuthLoading(false);
+  }, [resetAllData]);
 
   const bootAuth = useCallback(async () => {
+    if (sampleMode) {
+      setAuthLoading(false);
+      return;
+    }
     try {
       setAuthError(null);
       const nextSession = await getCurrentSession();
@@ -73,7 +111,7 @@ export default function App() {
     } finally {
       setAuthLoading(false);
     }
-  }, []);
+  }, [sampleMode]);
 
   useEffect(() => {
     void bootAuth();
@@ -85,16 +123,18 @@ export default function App() {
     document.documentElement.setAttribute('data-theme', theme);
   }, [theme]);
 
-  if (authLoading) {
-    return <LoginView error={null} />;
+  if (authLoading && !sampleMode) {
+    return <LoginView error={null} onUseSample={() => void enterSampleMode()} />;
   }
 
-  if (!user || !session) {
-    return <LoginView error={authError} />;
+  if (!sampleMode && (!user || !session)) {
+    return <LoginView error={authError} onUseSample={() => void enterSampleMode()} />;
   }
 
   const syncLabel =
-    syncStatus === 'loading'
+    sampleMode
+      ? 'Sample dataset'
+      : syncStatus === 'loading'
       ? 'Loading data...'
       : syncStatus === 'saving'
         ? 'Saving...'
@@ -106,13 +146,18 @@ export default function App() {
   return (
     <div className="min-h-screen bg-gray-950 text-gray-100">
       <NavBar
-        userEmail={user.email ?? 'Signed in'}
+        userEmail={sampleMode ? 'Sample mode' : user?.email ?? 'Signed in'}
         syncLabel={syncLabel}
         onLogout={async () => {
+          if (sampleMode) {
+            exitSampleMode();
+            return;
+          }
           await logout(session);
           setSession(null);
           setUser(null);
         }}
+        logoutLabel={sampleMode ? 'Exit sample' : 'Sign out'}
       />
       <main className={`${isAnalysisRoute ? 'max-w-7xl' : 'max-w-xl'} mx-auto px-4 py-6`}>
         <Routes>
@@ -121,7 +166,7 @@ export default function App() {
           <Route path="/history" element={<HistoryPage />} />
           <Route path="/analysis" element={<AnalysisPage />} />
           <Route path="/instructions" element={<InstructionsPage />} />
-          <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/settings" element={<SettingsPage onLoadSampleData={() => void enterSampleMode()} />} />
         </Routes>
       </main>
     </div>
