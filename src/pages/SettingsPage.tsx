@@ -7,11 +7,9 @@ interface SettingsPageProps {
 export default function SettingsPage({ onLoadSampleData }: SettingsPageProps) {
   const theme = useGameStore((s) => s.theme);
   const requireKiller = useGameStore((s) => s.requireKiller);
-  const showBigTurnButtons = useGameStore((s) => s.showBigTurnButtons);
   const showReserveButtons = useGameStore((s) => s.showReserveButtons);
   const setTheme = useGameStore((s) => s.setTheme);
   const setRequireKiller = useGameStore((s) => s.setRequireKiller);
-  const setShowBigTurnButtons = useGameStore((s) => s.setShowBigTurnButtons);
   const setShowReserveButtons = useGameStore((s) => s.setShowReserveButtons);
 
   return (
@@ -79,28 +77,6 @@ export default function SettingsPage({ onLoadSampleData }: SettingsPageProps) {
             Eliminated player is rated vs average survivor skill, and the loss is split across survivors.
           </p>
         )}
-
-        <label className="flex items-center justify-between gap-3 pt-1">
-          <span className="text-sm">Show big turn buttons</span>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={showBigTurnButtons}
-            onClick={() => setShowBigTurnButtons(!showBigTurnButtons)}
-            className={`w-12 h-7 rounded-full p-1 transition-colors ${
-              showBigTurnButtons ? 'bg-amber-600' : 'bg-gray-600'
-            }`}
-          >
-            <span
-              className={`block w-5 h-5 rounded-full bg-white transition-transform ${
-                showBigTurnButtons ? 'translate-x-5' : 'translate-x-0'
-              }`}
-            />
-          </button>
-        </label>
-        <p className="text-xs text-gray-500">
-          Enables large KILL/OUT buttons so you can use speed controls on iPad/tablet too.
-        </p>
 
         <label className="flex items-center justify-between gap-3 pt-1">
           <span className="text-sm">Show reserve selection buttons</span>

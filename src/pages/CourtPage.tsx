@@ -9,7 +9,6 @@ import MobileSpeedPanel from '../components/court/MobileSpeedPanel';
 
 export default function CourtPage() {
   const requireKiller = useGameStore((s) => s.requireKiller);
-  const showBigTurnButtons = useGameStore((s) => s.showBigTurnButtons);
   const showReserveButtons = useGameStore((s) => s.showReserveButtons);
   const gameInProgress = useGameStore((s) => s.gameInProgress);
   const court = useGameStore((s) => s.court);
@@ -71,7 +70,7 @@ export default function CourtPage() {
     });
   const canUndo = undoStack.length > 0;
   const canRedo = redoStack.length > 0;
-  const showSpeedPanel = isMobile || showBigTurnButtons;
+  const showSpeedPanel = isMobile;
   const showQuickSwap = showReserveButtons;
 
   useEffect(() => {
@@ -181,14 +180,8 @@ export default function CourtPage() {
     <div className="space-y-4">
       {showSpeedPanel && (
         <MobileSpeedPanel
-          requireKiller={requireKiller}
-          killerPos={killerPos}
-          eliminatedPos={eliminatedPos}
-          showBigButtons={showBigTurnButtons}
           canUndo={canUndo}
           canRedo={canRedo}
-          onPickKiller={(pos) => setKillerPos(pos)}
-          onPickEliminated={handlePositionPress}
           onUndo={undoLastTurn}
           onRedo={redoLastTurn}
         />

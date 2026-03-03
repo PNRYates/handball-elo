@@ -130,7 +130,6 @@ export function buildSampleState(): PersistedGameState {
     isInitialized: true,
     theme: 'dark',
     requireKiller: true,
-    showBigTurnButtons: false,
     showReserveButtons: true,
     undoStack: [],
     redoStack: [],

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useGameStore } from '../store/gameStore';
 import {
@@ -37,26 +37,16 @@ function scopeLabel(scope: AnalyticsScope): string {
   return 'Game range';
 }
 
-function InlineExplain({
-  label,
-  text,
-  className,
-}: {
-  label: string;
-  text: string;
-  className?: string;
-}) {
+function InlineExplain({ label, text, className }: { label: string; text: string; className?: string }) {
   const [open, setOpen] = useState(false);
-  const [position, setPosition] = useState<{ left: number; top: number; placement: 'top' | 'bottom' }>({
-    left: 0,
-    top: 0,
-    placement: 'bottom',
-  });
+  const [positionReady, setPositionReady] = useState(false);
+  const [position, setPosition] = useState<{ left: number; top: number }>({ left: 0, top: 0 });
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const popoverRef = useRef<HTMLDivElement | null>(null);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!open) return;
+    setPositionReady(false);
 
     const updatePosition = () => {
       const trigger = triggerRef.current;
@@ -66,19 +56,15 @@ function InlineExplain({
       const popWidth = pop?.offsetWidth ?? 260;
       const popHeight = pop?.offsetHeight ?? 72;
       const next = computePopoverPosition(
-        {
-          left: anchor.left,
-          top: anchor.top,
-          width: anchor.width,
-          height: anchor.height,
-        },
+        { left: anchor.left, top: anchor.top, width: anchor.width, height: anchor.height },
         { width: popWidth, height: popHeight },
         { width: window.innerWidth, height: window.innerHeight }
       );
-      setPosition(next);
+      setPosition({ left: next.left, top: next.top });
+      setPositionReady(true);
     };
 
-    const handlePointerDown = (event: MouseEvent | TouchEvent) => {
+    const handleOutside = (event: MouseEvent | TouchEvent) => {
       const target = event.target as Node;
       if (triggerRef.current?.contains(target)) return;
       setOpen(false);
@@ -88,19 +74,19 @@ function InlineExplain({
       if (event.key === 'Escape') setOpen(false);
     };
 
-    const rafId = window.requestAnimationFrame(updatePosition);
+    const raf = window.requestAnimationFrame(updatePosition);
     window.addEventListener('resize', updatePosition);
     window.addEventListener('scroll', updatePosition, true);
-    document.addEventListener('mousedown', handlePointerDown);
-    document.addEventListener('touchstart', handlePointerDown);
+    document.addEventListener('mousedown', handleOutside);
+    document.addEventListener('touchstart', handleOutside);
     document.addEventListener('keydown', handleEscape);
 
     return () => {
-      window.cancelAnimationFrame(rafId);
+      window.cancelAnimationFrame(raf);
       window.removeEventListener('resize', updatePosition);
       window.removeEventListener('scroll', updatePosition, true);
-      document.removeEventListener('mousedown', handlePointerDown);
-      document.removeEventListener('touchstart', handlePointerDown);
+      document.removeEventListener('mousedown', handleOutside);
+      document.removeEventListener('touchstart', handleOutside);
       document.removeEventListener('keydown', handleEscape);
     };
   }, [open]);
@@ -119,7 +105,7 @@ function InlineExplain({
       >
         {label}
       </button>
-      {open &&
+      {open && positionReady &&
         createPortal(
           <div
             ref={popoverRef}
@@ -155,6 +141,14 @@ function getTableMaxHeight(limit: number): number {
   return 42 + limit * 34;
 }
 
+function Th({ label, help }: { label: string; help: string }) {
+  return (
+    <th className="py-1.5 pr-2">
+      <InlineExplain label={label} text={help} />
+    </th>
+  );
+}
+
 function LineChartCard({
   title,
   titleHelp,
@@ -172,18 +166,19 @@ function LineChartCard({
   timeWindow: 'all' | '50' | '20';
   onTimeWindowChange: (next: 'all' | '50' | '20') => void;
 }) {
-  const height = 280;
+  const height = 340;
   const padL = 52;
   const padR = 20;
   const padY = 24;
 
   const chartContainerRef = useRef<HTMLDivElement | null>(null);
   const [chartWidth, setChartWidth] = useState(900);
+  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+  const [hoverPointPx, setHoverPointPx] = useState<{ x: number; y: number } | null>(null);
 
   const displaySeries = useMemo(() => {
     if (timeWindow === 'all') return series;
-    const n = Number(timeWindow);
-    return series.slice(-n);
+    return series.slice(-Number(timeWindow));
   }, [series, timeWindow]);
 
   const allValues = selected.flatMap((id) => displaySeries.map((p) => p.values[id] ?? 0));
@@ -192,23 +187,15 @@ function LineChartCard({
   const span = Math.max(1, max - min);
   const colors = ['#f59e0b', '#22c55e', '#3b82f6', '#ef4444', '#a78bfa', '#14b8a6'];
 
-  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
-  const [hoverPointPx, setHoverPointPx] = useState<{ x: number; y: number } | null>(null);
-
   useEffect(() => {
     const node = chartContainerRef.current;
     if (!node) return;
 
-    const updateWidth = (next: number) => {
-      const safe = Math.max(760, Math.floor(next));
-      setChartWidth(safe);
-    };
-
+    const updateWidth = (next: number) => setChartWidth(Math.max(760, Math.floor(next)));
     updateWidth(node.clientWidth);
+
     const observer = new ResizeObserver((entries) => {
-      for (const entry of entries) {
-        updateWidth(entry.contentRect.width);
-      }
+      for (const entry of entries) updateWidth(entry.contentRect.width);
     });
     observer.observe(node);
 
@@ -226,7 +213,7 @@ function LineChartCard({
     return Array.from({ length: count }, (_, i) => min + (i / (count - 1)) * span);
   }, [min, span]);
 
-  const syncHoverFromPoint = (clientX: number, clientY: number, target: SVGSVGElement) => {
+  const syncHover = (clientX: number, clientY: number, target: SVGSVGElement) => {
     const rect = target.getBoundingClientRect();
     const localX = clientX - rect.left;
     const localY = clientY - rect.top;
@@ -277,7 +264,7 @@ function LineChartCard({
 
       <div
         ref={chartContainerRef}
-        className="overflow-x-auto relative"
+        className="overflow-x-auto overflow-y-hidden relative"
         onMouseLeave={() => {
           setHoveredIndex(null);
           setHoverPointPx(null);
@@ -285,11 +272,11 @@ function LineChartCard({
       >
         <svg
           viewBox={`0 0 ${chartWidth} ${height}`}
-          className="h-72 block"
+          className="h-[22rem] block"
           style={{ width: chartWidth }}
-          onMouseMove={(e) => syncHoverFromPoint(e.clientX, e.clientY, e.currentTarget)}
-          onPointerMove={(e) => syncHoverFromPoint(e.clientX, e.clientY, e.currentTarget)}
-          onPointerDown={(e) => syncHoverFromPoint(e.clientX, e.clientY, e.currentTarget)}
+          onMouseMove={(e) => syncHover(e.clientX, e.clientY, e.currentTarget)}
+          onPointerMove={(e) => syncHover(e.clientX, e.clientY, e.currentTarget)}
+          onPointerDown={(e) => syncHover(e.clientX, e.clientY, e.currentTarget)}
         >
           <rect x={0} y={0} width={chartWidth} height={height} fill="#111827" rx={8} />
 
@@ -312,19 +299,9 @@ function LineChartCard({
             Turns
           </text>
 
-          {selected.map((id, lineIndex) => {
-            const points = displaySeries
-              .map((p, i) => `${toX(i)},${toY(p.values[id] ?? 0)}`)
-              .join(' ');
-            return (
-              <polyline
-                key={id}
-                points={points}
-                fill="none"
-                stroke={colors[lineIndex % colors.length]}
-                strokeWidth="2"
-              />
-            );
+          {selected.map((id, i) => {
+            const points = displaySeries.map((p, idx) => `${toX(idx)},${toY(p.values[id] ?? 0)}`).join(' ');
+            return <polyline key={id} points={points} fill="none" stroke={colors[i % colors.length]} strokeWidth="2" />;
           })}
 
           {hoverPoint && (
@@ -383,14 +360,6 @@ function LineChartCard({
   );
 }
 
-function Th({ label, help }: { label: string; help: string }) {
-  return (
-    <th className="py-1.5 pr-2">
-      <InlineExplain label={label} text={help} />
-    </th>
-  );
-}
-
 export default function AnalysisPage() {
   const turns = useGameStore((s) => s.turns);
   const gameHistory = useGameStore((s) => s.gameHistory);
@@ -399,14 +368,12 @@ export default function AnalysisPage() {
   const [filter, setFilter] = useState<AnalyticsFilterState>(defaultFilter);
   const [selectedPlayers, setSelectedPlayers] = useState<string[]>([]);
   const [h2hSort, setH2hSort] = useState<'volume' | 'net' | 'ratio'>('volume');
+  const [h2hPlayers, setH2hPlayers] = useState<string[]>([]);
   const [trendWindow, setTrendWindow] = useState<'all' | '50' | '20'>('all');
   const [tableRowsVisible, setTableRowsVisible] = useState(12);
   const [h2hRowsVisible, setH2hRowsVisible] = useState(20);
 
-  const filtered = useMemo(
-    () => getFilteredTurns(turns, gameHistory, filter),
-    [turns, gameHistory, filter]
-  );
+  const filtered = useMemo(() => getFilteredTurns(turns, gameHistory, filter), [turns, gameHistory, filter]);
 
   useEffect(() => {
     if (selectedPlayers.length === 0 && filtered.length > 0) {
@@ -414,14 +381,8 @@ export default function AnalysisPage() {
     }
   }, [filtered, selectedPlayers.length]);
 
-  const trends = useMemo(
-    () => buildPerformanceTrends(filtered, players, selectedPlayers),
-    [filtered, players, selectedPlayers]
-  );
-  const h2h = useMemo(
-    () => buildHeadToHead(filtered, players, filter.minTurnsThreshold),
-    [filtered, players, filter.minTurnsThreshold]
-  );
+  const trends = useMemo(() => buildPerformanceTrends(filtered, players, selectedPlayers), [filtered, players, selectedPlayers]);
+  const h2h = useMemo(() => buildHeadToHead(filtered, players, filter.minTurnsThreshold), [filtered, players, filter.minTurnsThreshold]);
   const strategy = useMemo(() => buildPositionStrategy(filtered), [filtered]);
   const summary = useMemo(() => buildPlayerSummary(filtered), [filtered]);
 
@@ -432,13 +393,17 @@ export default function AnalysisPage() {
     return list.sort((a, b) => b.turnsTogether - a.turnsTogether);
   }, [h2h, h2hSort]);
 
-  const top = topRivalries(h2h, 8);
+  const filteredH2h = useMemo(() => {
+    if (h2hPlayers.length === 0) return sortedH2h;
+    const selected = new Set(h2hPlayers);
+    return sortedH2h.filter((row) => selected.has(row.playerAId) || selected.has(row.playerBId));
+  }, [sortedH2h, h2hPlayers]);
+
+  const top = topRivalries(filteredH2h, 8);
 
   const volatilityById = useMemo(() => {
     const map = new Map<string, { volatility: number; averageDelta: number }>();
-    for (const row of trends.volatility) {
-      map.set(row.playerId, { volatility: row.volatility, averageDelta: row.averageDelta });
-    }
+    for (const row of trends.volatility) map.set(row.playerId, { volatility: row.volatility, averageDelta: row.averageDelta });
     return map;
   }, [trends.volatility]);
 
@@ -446,32 +411,25 @@ export default function AnalysisPage() {
     () =>
       trends.formMetrics.map((row) => {
         const vol = volatilityById.get(row.playerId);
-        return {
-          ...row,
-          volatility: vol?.volatility ?? 0,
-          avgDelta: vol?.averageDelta ?? 0,
-        };
+        return { ...row, volatility: vol?.volatility ?? 0, avgDelta: vol?.averageDelta ?? 0 };
       }),
     [trends.formMetrics, volatilityById]
   );
 
-  if (filtered.length === 0) {
-    return <p className="text-gray-500 text-center mt-12">No analysis yet for selected filter.</p>;
-  }
+  if (filtered.length === 0) return <p className="text-gray-500 text-center mt-12">No analysis yet for selected filter.</p>;
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-lg font-bold mb-1">Analytics Dashboard</h1>
-        <p className="text-xs text-gray-500">{scopeLabel(filter.scope)} • {summary.totalTurns} turns • {summary.totalGamesRepresented} games</p>
+        <p className="text-xs text-gray-500">
+          {scopeLabel(filter.scope)} • {summary.totalTurns} turns • {summary.totalGamesRepresented} games
+        </p>
       </div>
 
       <section className="bg-gray-800 border border-gray-700 rounded-lg p-4 space-y-3">
         <h2 className="font-medium">
-          <InlineExplain
-            label="Filters"
-            text="Adjust the analysis dataset. These controls do not change gameplay data, they only change what is included in charts and tables."
-          />
+          <InlineExplain label="Filters" text="Adjust the analysis dataset. These controls do not change gameplay data, they only change what is included in charts and tables." />
         </h2>
         <div className="flex flex-wrap gap-2">
           {(['all_time', 'current_game', 'last_5_games', 'last_10_games', 'game_range'] as AnalyticsScope[]).map((scope) => (
@@ -479,11 +437,7 @@ export default function AnalysisPage() {
               key={scope}
               type="button"
               onClick={() => setFilter((f) => ({ ...f, scope }))}
-              className={`px-2.5 py-1.5 text-xs rounded border ${
-                filter.scope === scope
-                  ? 'bg-amber-600 text-white border-amber-500'
-                  : 'bg-gray-900 border-gray-700 text-gray-300'
-              }`}
+              className={`px-2.5 py-1.5 text-xs rounded border ${filter.scope === scope ? 'bg-amber-600 text-white border-amber-500' : 'bg-gray-900 border-gray-700 text-gray-300'}`}
             >
               {scopeLabel(scope)}
             </button>
@@ -496,16 +450,10 @@ export default function AnalysisPage() {
               checked={filter.includeCurrentGame}
               onChange={(e) => setFilter((f) => ({ ...f, includeCurrentGame: e.target.checked }))}
             />
-            <InlineExplain
-              label="Include current game"
-              text="If checked, analytics include in-progress turns from the active game."
-            />
+            <InlineExplain label="Include current game" text="If checked, analytics include in-progress turns from the active game." />
           </label>
           <label className="inline-flex items-center gap-2">
-            <InlineExplain
-              label="Min turns"
-              text="Head-to-head rows with fewer shared turns than this threshold are hidden."
-            />
+            <InlineExplain label="Min turns" text="Head-to-head rows with fewer shared turns than this threshold are hidden." />
             <input
               type="number"
               min={1}
@@ -541,60 +489,41 @@ export default function AnalysisPage() {
 
       <section className="grid grid-cols-2 md:grid-cols-4 gap-2">
         <div className="bg-gray-800 border border-gray-700 rounded-lg p-3">
-          <p className="text-xs text-gray-500">
-            <InlineExplain label="Turns" text="Total turns in the currently selected analytics filter window." />
-          </p>
+          <p className="text-xs text-gray-500"><InlineExplain label="Turns" text="Total turns in the currently selected analytics filter window." /></p>
           <p className="font-mono text-xl">{summary.totalTurns}</p>
         </div>
         <div className="bg-gray-800 border border-gray-700 rounded-lg p-3">
-          <p className="text-xs text-gray-500">
-            <InlineExplain label="Players" text="Unique players present in filtered turns." />
-          </p>
+          <p className="text-xs text-gray-500"><InlineExplain label="Players" text="Unique players present in filtered turns." /></p>
           <p className="font-mono text-xl">{summary.uniquePlayers}</p>
         </div>
         <div className="bg-gray-800 border border-gray-700 rounded-lg p-3">
-          <p className="text-xs text-gray-500">
-            <InlineExplain label="Games" text="Number of games represented by filtered turns." />
-          </p>
+          <p className="text-xs text-gray-500"><InlineExplain label="Games" text="Number of games represented by filtered turns." /></p>
           <p className="font-mono text-xl">{summary.totalGamesRepresented}</p>
         </div>
         <div className="bg-gray-800 border border-gray-700 rounded-lg p-3">
-          <p className="text-xs text-gray-500">
-            <InlineExplain label="Avg turns/game" text="Average number of turns per represented game in the active filter." />
-          </p>
+          <p className="text-xs text-gray-500"><InlineExplain label="Avg turns/game" text="Average number of turns per represented game in the active filter." /></p>
           <p className="font-mono text-xl">{summary.avgTurnsPerGame}</p>
         </div>
       </section>
 
       <section className="bg-gray-800 border border-gray-700 rounded-lg p-4 space-y-3">
         <h2 className="font-medium">
-          <InlineExplain
-            label="Selected Players"
-            text="Select which players appear in the Performance Trends chart. Defaults to most active players."
-          />
+          <InlineExplain label="Selected Players" text="Select which players appear in the Performance Trends chart. Defaults to most active players." />
         </h2>
         <div className="flex flex-wrap gap-2">
-          {Object.values(players)
-            .sort((a, b) => b.elo - a.elo)
-            .map((p) => {
-              const active = selectedPlayers.includes(p.id);
-              return (
-                <button
-                  key={p.id}
-                  type="button"
-                  onClick={() =>
-                    setSelectedPlayers((ids) =>
-                      active ? ids.filter((id) => id !== p.id) : [...ids, p.id].slice(-8)
-                    )
-                  }
-                  className={`text-xs px-2 py-1 rounded border ${
-                    active ? 'bg-amber-600 border-amber-500 text-white' : 'bg-gray-900 border-gray-700 text-gray-300'
-                  }`}
-                >
-                  {p.name}
-                </button>
-              );
-            })}
+          {Object.values(players).sort((a, b) => b.elo - a.elo).map((p) => {
+            const active = selectedPlayers.includes(p.id);
+            return (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => setSelectedPlayers((ids) => (active ? ids.filter((id) => id !== p.id) : [...ids, p.id]))}
+                className={`text-xs px-2 py-1 rounded border ${active ? 'bg-amber-600 border-amber-500 text-white' : 'bg-gray-900 border-gray-700 text-gray-300'}`}
+              >
+                {p.name}
+              </button>
+            );
+          })}
         </div>
       </section>
 
@@ -611,29 +540,17 @@ export default function AnalysisPage() {
       <section className="bg-gray-800 border border-gray-700 rounded-lg p-4 space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="font-medium">
-            <InlineExplain
-              label="Form + Volatility"
-              text="Combines short-term performance and consistency metrics in one view."
-            />
+            <InlineExplain label="Form + Volatility" text="Combines short-term performance and consistency metrics in one view." />
           </h2>
           <label className="text-xs flex items-center gap-2">
             <span className="text-gray-400">Visible rows before scroll</span>
-            <select
-              value={tableRowsVisible}
-              onChange={(e) => setTableRowsVisible(Number(e.target.value))}
-              className="bg-gray-900 border border-gray-700 rounded px-2 py-1"
-            >
-              {[8, 12, 20, 40].map((n) => (
-                <option key={n} value={n}>{n}</option>
-              ))}
+            <select value={tableRowsVisible} onChange={(e) => setTableRowsVisible(Number(e.target.value))} className="bg-gray-900 border border-gray-700 rounded px-2 py-1">
+              {[8, 12, 20, 40].map((n) => <option key={n} value={n}>{n}</option>)}
             </select>
           </label>
         </div>
 
-        <div
-          className={`overflow-x-auto ${combinedRows.length > tableRowsVisible ? 'overflow-y-auto' : ''}`}
-          style={combinedRows.length > tableRowsVisible ? { maxHeight: getTableMaxHeight(tableRowsVisible) } : undefined}
-        >
+        <div className={`overflow-x-auto ${combinedRows.length > tableRowsVisible ? 'overflow-y-auto' : ''}`} style={combinedRows.length > tableRowsVisible ? { maxHeight: getTableMaxHeight(tableRowsVisible) } : undefined}>
           <table className="w-full text-sm">
             <thead className="sticky top-0 bg-gray-800">
               <tr className="text-left text-gray-500 border-b border-gray-700">
@@ -667,10 +584,7 @@ export default function AnalysisPage() {
         <section className="bg-gray-800 border border-gray-700 rounded-lg p-4 space-y-3">
           <div className="flex items-center justify-between gap-2">
             <h2 className="font-medium">
-              <InlineExplain
-                label="Head-to-Head Intelligence"
-                text="Pairwise matchup outcomes across turns where both players were on court."
-              />
+              <InlineExplain label="Head-to-Head Intelligence" text="Pairwise matchup outcomes across turns where both players were on court." />
             </h2>
             <div className="flex gap-2 text-xs">
               {(['volume', 'net', 'ratio'] as const).map((mode) => (
@@ -679,11 +593,7 @@ export default function AnalysisPage() {
                   type="button"
                   aria-pressed={h2hSort === mode}
                   onClick={() => setH2hSort(mode)}
-                  className={`px-2 py-1 border rounded transition-colors ${
-                    h2hSort === mode
-                      ? 'bg-amber-600 border-amber-500 text-white'
-                      : 'bg-gray-900 border-gray-700 text-gray-300 hover:border-gray-500'
-                  }`}
+                  className={`px-2 py-1 border rounded transition-colors ${h2hSort === mode ? 'bg-amber-600 border-amber-500 text-white' : 'bg-gray-900 border-gray-700 text-gray-300 hover:border-gray-500'}`}
                 >
                   {mode === 'volume' ? 'Volume' : mode === 'net' ? 'Net' : 'Ratio'}
                 </button>
@@ -691,30 +601,42 @@ export default function AnalysisPage() {
             </div>
           </div>
 
-          <MiniBars
-            values={top.map((r) => r.turnsTogether)}
-            labels={top.map((r) => `${r.playerAName} vs ${r.playerBName}`)}
-          />
+          <div className="space-y-2">
+            <p className="text-xs text-gray-400">Filter to specific players</p>
+            <div className="flex flex-wrap gap-2">
+              {Object.values(players).sort((a, b) => a.name.localeCompare(b.name)).map((p) => {
+                const active = h2hPlayers.includes(p.id);
+                return (
+                  <button
+                    key={`h2h-${p.id}`}
+                    type="button"
+                    onClick={() => setH2hPlayers((current) => active ? current.filter((id) => id !== p.id) : [...current, p.id])}
+                    className={`text-xs px-2 py-1 rounded border ${active ? 'bg-amber-600 border-amber-500 text-white' : 'bg-gray-900 border-gray-700 text-gray-300 hover:border-gray-500'}`}
+                  >
+                    {p.name}
+                  </button>
+                );
+              })}
+              {h2hPlayers.length > 0 && (
+                <button type="button" onClick={() => setH2hPlayers([])} className="text-xs px-2 py-1 rounded border bg-gray-900 border-gray-700 text-gray-300 hover:border-gray-500">
+                  Clear
+                </button>
+              )}
+            </div>
+          </div>
+
+          <MiniBars values={top.map((r) => r.turnsTogether)} labels={top.map((r) => `${r.playerAName} vs ${r.playerBName}`)} />
 
           <div className="flex justify-end">
             <label className="text-xs flex items-center gap-2">
               <span className="text-gray-400">Visible rows before scroll</span>
-              <select
-                value={h2hRowsVisible}
-                onChange={(e) => setH2hRowsVisible(Number(e.target.value))}
-                className="bg-gray-900 border border-gray-700 rounded px-2 py-1"
-              >
-                {[10, 20, 40, 80].map((n) => (
-                  <option key={n} value={n}>{n}</option>
-                ))}
+              <select value={h2hRowsVisible} onChange={(e) => setH2hRowsVisible(Number(e.target.value))} className="bg-gray-900 border border-gray-700 rounded px-2 py-1">
+                {[10, 20, 40, 80].map((n) => <option key={n} value={n}>{n}</option>)}
               </select>
             </label>
           </div>
 
-          <div
-            className={`overflow-x-auto ${sortedH2h.length > h2hRowsVisible ? 'overflow-y-auto' : ''}`}
-            style={sortedH2h.length > h2hRowsVisible ? { maxHeight: getTableMaxHeight(h2hRowsVisible) } : undefined}
-          >
+          <div className={`overflow-x-auto ${filteredH2h.length > h2hRowsVisible ? 'overflow-y-auto' : ''}`} style={filteredH2h.length > h2hRowsVisible ? { maxHeight: getTableMaxHeight(h2hRowsVisible) } : undefined}>
             <table className="w-full text-sm">
               <thead className="sticky top-0 bg-gray-800">
                 <tr className="text-left text-gray-500 border-b border-gray-700">
@@ -726,7 +648,7 @@ export default function AnalysisPage() {
                 </tr>
               </thead>
               <tbody>
-                {sortedH2h.map((row: HeadToHeadRow) => (
+                {filteredH2h.map((row: HeadToHeadRow) => (
                   <tr key={row.pairKey} className="border-b border-gray-800 last:border-b-0">
                     <td className="py-1.5 pr-2">{row.playerAName} vs {row.playerBName}</td>
                     <td className="py-1.5 pr-2 font-mono">{row.turnsTogether}</td>
@@ -742,64 +664,39 @@ export default function AnalysisPage() {
 
         <section className="bg-gray-800 border border-gray-700 rounded-lg p-4 space-y-3">
           <h2 className="font-medium">
-            <InlineExplain
-              label="Position Strategy"
-              text="Square-level risk/reward and rotation impact based on filtered turn data."
-            />
+            <InlineExplain label="Position Strategy" text="Square-level risk/reward and rotation impact based on filtered turn data." />
           </h2>
           <div className="grid md:grid-cols-2 gap-4">
             <div>
               <h3 className="text-sm text-gray-400 mb-2">
                 <InlineExplain label="Elimination Rate by Square" text="How often each square was the eliminated position." />
               </h3>
-              <MiniBars
-                values={strategy.eliminationByPosition.map((r) => r.count)}
-                labels={strategy.eliminationByPosition.map((r) => `#${r.position + 1}`)}
-              />
+              <MiniBars values={strategy.eliminationByPosition.map((r) => r.count)} labels={strategy.eliminationByPosition.map((r) => `#${r.position + 1}`)} />
             </div>
             <div>
               <h3 className="text-sm text-gray-400 mb-2">
                 <InlineExplain label="Kill Conversion by Square" text="How many kills originated from each square." />
               </h3>
-              <MiniBars
-                values={strategy.killsByPosition.map((r) => r.count)}
-                labels={strategy.killsByPosition.map((r) => `#${r.position + 1}`)}
-              />
+              <MiniBars values={strategy.killsByPosition.map((r) => r.count)} labels={strategy.killsByPosition.map((r) => `#${r.position + 1}`)} />
             </div>
           </div>
 
           <div className="grid md:grid-cols-2 gap-3 text-sm">
             <div className="border border-gray-700 rounded-lg p-3">
-              <p className="text-gray-500 text-xs mb-1">
-                <InlineExplain label="Safe Square" text="Square with lowest elimination rate in current filter window." />
-              </p>
+              <p className="text-gray-500 text-xs mb-1"><InlineExplain label="Safe Square" text="Square with lowest elimination rate in current filter window." /></p>
               <p className="font-semibold">#{strategy.safeSquare + 1}</p>
             </div>
             <div className="border border-gray-700 rounded-lg p-3">
-              <p className="text-gray-500 text-xs mb-1">
-                <InlineExplain label="Pressure Square" text="Square with highest elimination rate in current filter window." />
-              </p>
+              <p className="text-gray-500 text-xs mb-1"><InlineExplain label="Pressure Square" text="Square with highest elimination rate in current filter window." /></p>
               <p className="font-semibold">#{strategy.pressureSquare + 1}</p>
             </div>
             <div className="border border-gray-700 rounded-lg p-3">
-              <p className="text-gray-500 text-xs mb-1">
-                <InlineExplain
-                  label="Entry Impact (first 3 turns)"
-                  text="Average net Elo across a player's first 3 turns after entering at #4."
-                />
-              </p>
-              <p className={`font-semibold ${statClass(strategy.entryImpact.averageThreeTurnNet)}`}>
-                {strategy.entryImpact.averageThreeTurnNet}
-              </p>
+              <p className="text-gray-500 text-xs mb-1"><InlineExplain label="Entry Impact (first 3 turns)" text="Average net Elo across a player's first 3 turns after entering at #4." /></p>
+              <p className={`font-semibold ${statClass(strategy.entryImpact.averageThreeTurnNet)}`}>{strategy.entryImpact.averageThreeTurnNet}</p>
               <p className="text-xs text-gray-500 mt-1">{strategy.entryImpact.entries} entries sampled</p>
             </div>
             <div className="border border-gray-700 rounded-lg p-3">
-              <p className="text-gray-500 text-xs mb-1">
-                <InlineExplain
-                  label="Rotation Efficiency (avg Elo delta)"
-                  text="Average turn-by-turn Elo delta for players occupying each square."
-                />
-              </p>
+              <p className="text-gray-500 text-xs mb-1"><InlineExplain label="Rotation Efficiency (avg Elo delta)" text="Average turn-by-turn Elo delta for players occupying each square." /></p>
               <div className="text-xs space-y-1 mt-1">
                 {strategy.rotationEfficiency.map((r) => (
                   <div key={r.position} className="flex justify-between">
