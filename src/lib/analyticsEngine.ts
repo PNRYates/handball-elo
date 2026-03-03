@@ -22,6 +22,16 @@ function round2(n: number): number {
   return Math.round(n * 100) / 100;
 }
 
+function toDateStartMs(value: string | null): number | null {
+  if (!value) return null;
+  return new Date(`${value}T00:00:00`).getTime();
+}
+
+function toDateEndMs(value: string | null): number | null {
+  if (!value) return null;
+  return new Date(`${value}T23:59:59.999`).getTime();
+}
+
 export function getFilteredTurns(
   currentTurns: Turn[],
   gameHistory: CompletedGame[],
@@ -78,7 +88,14 @@ export function getFilteredTurns(
     }
   }
 
-  return selected;
+  const startMs = toDateStartMs(filter.dateStart);
+  const endMs = toDateEndMs(filter.dateEnd);
+
+  return selected.filter(({ turn }) => {
+    if (startMs !== null && turn.timestamp < startMs) return false;
+    if (endMs !== null && turn.timestamp > endMs) return false;
+    return true;
+  });
 }
 
 function computePlayerList(turns: TimelineTurn[]): string[] {

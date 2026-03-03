@@ -30,6 +30,7 @@ export interface PersistedGameState {
   undoStack: TurnStateSnapshot[];
   redoStack: TurnStateSnapshot[];
   recentEntrants: string[];
+  hiddenPlayerIds: string[];
 }
 
 interface GameStore extends PersistedGameState {
@@ -46,6 +47,7 @@ interface GameStore extends PersistedGameState {
   deleteGameFromHistory: (gameId: number) => void;
   renameGameInHistory: (gameId: number, name: string) => void;
   renamePlayer: (oldId: string, newName: string) => void;
+  hidePlayer: (playerId: string) => void;
   hydrateFromRemote: (state: PersistedGameState) => void;
   setTheme: (theme: 'dark' | 'light') => void;
   setRequireKiller: (requireKiller: boolean) => void;
@@ -69,6 +71,7 @@ function createInitialState(): PersistedGameState {
     undoStack: [],
     redoStack: [],
     recentEntrants: [],
+    hiddenPlayerIds: [],
   };
 }
 
@@ -89,6 +92,7 @@ export function getPersistedGameState(state: PersistedGameState): PersistedGameS
     undoStack: state.undoStack,
     redoStack: state.redoStack,
     recentEntrants: state.recentEntrants,
+    hiddenPlayerIds: state.hiddenPlayerIds,
   };
 }
 
@@ -144,6 +148,9 @@ export function sanitizePersistedGameState(input: unknown): PersistedGameState {
   const recentEntrants = Array.isArray(input.recentEntrants)
     ? (input.recentEntrants as string[])
     : fallback.recentEntrants;
+  const hiddenPlayerIds = Array.isArray(input.hiddenPlayerIds)
+    ? (input.hiddenPlayerIds as string[])
+    : fallback.hiddenPlayerIds;
 
   return {
     players,
@@ -161,6 +168,7 @@ export function sanitizePersistedGameState(input: unknown): PersistedGameState {
     undoStack,
     redoStack,
     recentEntrants,
+    hiddenPlayerIds,
   };
 }
 
@@ -227,6 +235,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       _lastSnapshot: null,
       undoStack: [],
       redoStack: [],
+      hiddenPlayerIds: state.hiddenPlayerIds.filter((id) => !court.includes(id)),
     });
   },
 
@@ -283,6 +292,11 @@ export const useGameStore = create<GameStore>((set, get) => ({
         ].slice(0, MAX_RECENT_ENTRANTS)
       : state.recentEntrants;
 
+    const activeIds = new Set(result.newCourt);
+    const hiddenPlayerIds = state.hiddenPlayerIds.filter(
+      (id) => !activeIds.has(id) && id !== result.newPlayer?.id
+    );
+
     set({
       court: result.newCourt,
       players: result.updatedPlayers,
@@ -292,6 +306,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       undoStack: [...state.undoStack, turnStateSnapshot].slice(-MAX_TURN_STACK),
       redoStack: [],
       recentEntrants: updatedRecentEntrants,
+      hiddenPlayerIds,
     });
   },
 
@@ -504,6 +519,16 @@ export const useGameStore = create<GameStore>((set, get) => ({
       undoStack: state.undoStack.map(mapTurnStateSnapshot),
       redoStack: state.redoStack.map(mapTurnStateSnapshot),
       recentEntrants: state.recentEntrants.map(mapId),
+      hiddenPlayerIds: state.hiddenPlayerIds.map(mapId),
     });
+  },
+
+  hidePlayer: (playerId) => {
+    const state = get();
+    if (!state.players[playerId]) return;
+    if (state.court.includes(playerId)) return;
+    if (state.hiddenPlayerIds.includes(playerId)) return;
+
+    set({ hiddenPlayerIds: [...state.hiddenPlayerIds, playerId] });
   },
 }));

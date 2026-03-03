@@ -67,6 +67,8 @@ const filterAll: AnalyticsFilterState = {
   minTurnsThreshold: 1,
   rangeStartGameId: null,
   rangeEndGameId: null,
+  dateStart: null,
+  dateEnd: null,
 };
 
 test('getFilteredTurns supports all-time/current/last-N/range filters', () => {
@@ -88,6 +90,25 @@ test('getFilteredTurns supports all-time/current/last-N/range filters', () => {
   });
   assert.equal(range.length, 1);
   assert.equal(range[0].gameId, 2);
+});
+
+test('date range filter restricts turns by timestamp', () => {
+  const base = Date.UTC(2026, 2, 1, 12, 0, 0);
+  const withDates: CompletedGame[] = [
+    {
+      ...game1,
+      turns: game1.turns.map((t, i) => ({ ...t, timestamp: base + i * 86_400_000 })),
+    },
+  ];
+
+  const filtered = getFilteredTurns([], withDates, {
+    ...filterAll,
+    includeCurrentGame: false,
+    dateStart: '2026-03-02',
+    dateEnd: '2026-03-02',
+  });
+
+  assert.equal(filtered.length, 1);
 });
 
 test('buildPerformanceTrends returns deterministic series and form metrics', () => {

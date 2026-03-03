@@ -4,12 +4,17 @@ import { useGameStore } from '../store/gameStore';
 export default function LeaderboardPage() {
   const players = useGameStore((s) => s.players);
   const renamePlayer = useGameStore((s) => s.renamePlayer);
+  const hidePlayer = useGameStore((s) => s.hidePlayer);
+  const hiddenPlayerIds = useGameStore((s) => s.hiddenPlayerIds);
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
   const editRef = useRef<HTMLInputElement>(null);
 
-  const sorted = Object.values(players).sort((a, b) => b.elo - a.elo);
+  const hiddenSet = new Set(hiddenPlayerIds);
+  const sorted = Object.values(players)
+    .filter((p) => !hiddenSet.has(p.id))
+    .sort((a, b) => b.elo - a.elo);
 
   useEffect(() => {
     if (editingId) {
@@ -90,8 +95,16 @@ export default function LeaderboardPage() {
                 &middot; {player.timesEliminated} deaths
               </div>
             </div>
-            <div className="text-right shrink-0 ml-3">
+            <div className="text-right shrink-0 ml-3 flex items-center gap-2">
               <div className="font-mono font-bold text-lg">{player.elo}</div>
+              <button
+                type="button"
+                onClick={() => hidePlayer(player.id)}
+                className="text-xs px-2 py-1 rounded border border-gray-600 text-gray-300 hover:border-red-500 hover:text-red-300"
+                title="Delete name"
+              >
+                Delete
+              </button>
             </div>
           </div>
         ))}

@@ -8,6 +8,8 @@ export interface AnalyticsFilterState {
   minTurnsThreshold: number;
   rangeStartGameId: number | null;
   rangeEndGameId: number | null;
+  dateStart: string | null;
+  dateEnd: string | null;
 }
 
 export interface TimelineTurn {

@@ -19,6 +19,8 @@ const defaultFilter: AnalyticsFilterState = {
   minTurnsThreshold: 5,
   rangeStartGameId: null,
   rangeEndGameId: null,
+  dateStart: null,
+  dateEnd: null,
 };
 
 function pct(v: number): string {
@@ -491,6 +493,24 @@ export default function AnalysisPage() {
               </label>
             </>
           )}
+          <label className="inline-flex items-center gap-2">
+            <span>Date from</span>
+            <input
+              type="date"
+              className="bg-gray-900 border border-gray-700 rounded px-2 py-1"
+              value={filter.dateStart ?? ''}
+              onChange={(e) => setFilter((f) => ({ ...f, dateStart: e.target.value || null }))}
+            />
+          </label>
+          <label className="inline-flex items-center gap-2">
+            <span>Date to</span>
+            <input
+              type="date"
+              className="bg-gray-900 border border-gray-700 rounded px-2 py-1"
+              value={filter.dateEnd ?? ''}
+              onChange={(e) => setFilter((f) => ({ ...f, dateEnd: e.target.value || null }))}
+            />
+          </label>
         </div>
       </section>
 

@@ -134,5 +134,6 @@ export function buildSampleState(): PersistedGameState {
     undoStack: [],
     redoStack: [],
     recentEntrants: [],
+    hiddenPlayerIds: [],
   };
 }

@@ -144,3 +144,17 @@ test('sanitizePersistedGameState normalizes game names when absent', () => {
 
   assert.equal(sanitized.gameHistory[0].name, null);
 });
+
+test('hidePlayer hides off-court players and keeps on-court players visible', () => {
+  resetStore();
+  const store = useGameStore.getState();
+
+  store.initializeGame(['Alice', 'Bob', 'Cara', 'Dan']);
+  useGameStore.getState().recordTurn(3, 0, 'Eve');
+
+  useGameStore.getState().hidePlayer('dan');
+  assert.equal(useGameStore.getState().hiddenPlayerIds.includes('dan'), true);
+
+  useGameStore.getState().hidePlayer('alice');
+  assert.equal(useGameStore.getState().hiddenPlayerIds.includes('alice'), false);
+});
