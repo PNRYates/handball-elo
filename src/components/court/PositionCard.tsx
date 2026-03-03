@@ -27,6 +27,7 @@ interface Props {
   player: Player;
   selectionState?: SelectionState;
   onClick?: () => void;
+  interactive?: boolean;
 }
 
 export default function PositionCard({
@@ -34,6 +35,7 @@ export default function PositionCard({
   player,
   selectionState = 'none',
   onClick,
+  interactive = true,
 }: Props) {
   const baseStyle =
     selectionState === 'none' ? positionColors[position] : selectionStyles[selectionState];
@@ -41,8 +43,11 @@ export default function PositionCard({
   return (
     <button
       type="button"
+      disabled={!interactive}
       onClick={onClick}
-      className={`w-full border rounded-lg p-3 flex items-center gap-3 transition-all cursor-pointer text-left ${baseStyle}`}
+      className={`w-full border rounded-lg p-3 flex items-center gap-3 transition-all text-left ${
+        interactive ? 'cursor-pointer' : 'cursor-default'
+      } ${baseStyle}`}
     >
       <span
         className={`${positionLabels[position]} text-white text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center shrink-0`}

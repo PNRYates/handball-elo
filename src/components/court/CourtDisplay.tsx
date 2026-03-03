@@ -20,6 +20,7 @@ interface Props {
   eliminatedPos: CourtPosition | null;
   onPositionClick: (pos: CourtPosition) => void;
   phase: SelectionPhase;
+  interactive?: boolean;
 }
 
 export default function CourtDisplay({
@@ -27,6 +28,7 @@ export default function CourtDisplay({
   eliminatedPos,
   onPositionClick,
   phase,
+  interactive = true,
 }: Props) {
   const court = useGameStore((s) => s.court);
   const players = useGameStore((s) => s.players);
@@ -60,6 +62,7 @@ export default function CourtDisplay({
             position={i + 1}
             player={player}
             selectionState={selectionState}
+            interactive={interactive}
             onClick={() => onPositionClick(pos)}
           />
         );
