@@ -3,16 +3,16 @@ import type { Player } from '../../types';
 type SelectionState = 'none' | 'killer' | 'eliminated';
 
 const positionColors: Record<number, string> = {
-  1: 'border-amber-500 bg-amber-500/10',
-  2: 'border-blue-500 bg-blue-500/10',
-  3: 'border-green-500 bg-green-500/10',
+  1: 'border-gray-600 bg-gray-800',
+  2: 'border-gray-600 bg-gray-800',
+  3: 'border-gray-600 bg-gray-800',
   4: 'border-gray-600 bg-gray-800',
 };
 
 const positionLabels: Record<number, string> = {
-  1: 'bg-amber-500',
-  2: 'bg-blue-500',
-  3: 'bg-green-500',
+  1: 'bg-gray-600',
+  2: 'bg-gray-600',
+  3: 'bg-gray-600',
   4: 'bg-gray-600',
 };
 

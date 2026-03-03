@@ -26,6 +26,8 @@ export interface PersistedGameState {
   isInitialized: boolean;
   theme: 'dark' | 'light';
   requireKiller: boolean;
+  showBigTurnButtons: boolean;
+  showReserveButtons: boolean;
   undoStack: TurnStateSnapshot[];
   redoStack: TurnStateSnapshot[];
   recentEntrants: string[];
@@ -47,6 +49,8 @@ interface GameStore extends PersistedGameState {
   hydrateFromRemote: (state: PersistedGameState) => void;
   setTheme: (theme: 'dark' | 'light') => void;
   setRequireKiller: (requireKiller: boolean) => void;
+  setShowBigTurnButtons: (showBigTurnButtons: boolean) => void;
+  setShowReserveButtons: (showReserveButtons: boolean) => void;
 }
 
 function createInitialState(): PersistedGameState {
@@ -62,6 +66,8 @@ function createInitialState(): PersistedGameState {
     isInitialized: false,
     theme: 'dark',
     requireKiller: true,
+    showBigTurnButtons: false,
+    showReserveButtons: true,
     undoStack: [],
     redoStack: [],
     recentEntrants: [],
@@ -81,6 +87,8 @@ export function getPersistedGameState(state: PersistedGameState): PersistedGameS
     isInitialized: state.isInitialized,
     theme: state.theme,
     requireKiller: state.requireKiller,
+    showBigTurnButtons: state.showBigTurnButtons,
+    showReserveButtons: state.showReserveButtons,
     undoStack: state.undoStack,
     redoStack: state.redoStack,
     recentEntrants: state.recentEntrants,
@@ -118,6 +126,14 @@ export function sanitizePersistedGameState(input: unknown): PersistedGameState {
   const theme = input.theme === 'light' ? 'light' : 'dark';
   const requireKiller =
     typeof input.requireKiller === 'boolean' ? input.requireKiller : fallback.requireKiller;
+  const showBigTurnButtons =
+    typeof input.showBigTurnButtons === 'boolean'
+      ? input.showBigTurnButtons
+      : fallback.showBigTurnButtons;
+  const showReserveButtons =
+    typeof input.showReserveButtons === 'boolean'
+      ? input.showReserveButtons
+      : fallback.showReserveButtons;
   const undoStack = Array.isArray(input.undoStack)
     ? (input.undoStack as TurnStateSnapshot[])
     : fallback.undoStack;
@@ -140,6 +156,8 @@ export function sanitizePersistedGameState(input: unknown): PersistedGameState {
     isInitialized,
     theme,
     requireKiller,
+    showBigTurnButtons,
+    showReserveButtons,
     undoStack,
     redoStack,
     recentEntrants,
@@ -173,6 +191,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
   setTheme: (theme) => set({ theme }),
 
   setRequireKiller: (requireKiller) => set({ requireKiller }),
+
+  setShowBigTurnButtons: (showBigTurnButtons) => set({ showBigTurnButtons }),
+
+  setShowReserveButtons: (showReserveButtons) => set({ showReserveButtons }),
 
   initializeGame: (names) => {
     const state = get();
