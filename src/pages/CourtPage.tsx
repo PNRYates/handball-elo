@@ -72,7 +72,7 @@ export default function CourtPage() {
   const canUndo = undoStack.length > 0;
   const canRedo = redoStack.length > 0;
   const showSpeedPanel = isMobile || showBigTurnButtons;
-  const showQuickSwap = showReserveButtons && showSpeedPanel;
+  const showQuickSwap = showReserveButtons;
 
   useEffect(() => {
     const media = window.matchMedia('(max-width: 767px)');
