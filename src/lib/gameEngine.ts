@@ -3,7 +3,7 @@ import {
   calculateEliminationElo,
   calculateEliminationVsAverageElo,
   calculateSurvivalBonus,
-} from './elo';
+} from './elo.ts';
 
 export interface TurnResult {
   newCourt: [string, string, string, string];
