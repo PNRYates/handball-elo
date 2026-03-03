@@ -46,7 +46,6 @@ function InlineExplain({ label, text, className }: { label: string; text: string
 
   useLayoutEffect(() => {
     if (!open) return;
-    setPositionReady(false);
 
     const updatePosition = () => {
       const trigger = triggerRef.current;
@@ -96,11 +95,20 @@ function InlineExplain({ label, text, className }: { label: string; text: string
       <button
         ref={triggerRef}
         type="button"
-        onMouseEnter={() => setOpen(true)}
+        onMouseEnter={() => {
+          setPositionReady(false);
+          setOpen(true);
+        }}
         onMouseLeave={() => setOpen(false)}
-        onFocus={() => setOpen(true)}
+        onFocus={() => {
+          setPositionReady(false);
+          setOpen(true);
+        }}
         onBlur={() => setOpen(false)}
-        onClick={() => setOpen(true)}
+        onClick={() => {
+          setPositionReady(false);
+          setOpen(true);
+        }}
         className={`inline text-inherit underline decoration-dotted underline-offset-4 decoration-gray-500 hover:decoration-gray-300 ${className ?? ''}`}
       >
         {label}
@@ -374,14 +382,13 @@ export default function AnalysisPage() {
   const [h2hRowsVisible, setH2hRowsVisible] = useState(20);
 
   const filtered = useMemo(() => getFilteredTurns(turns, gameHistory, filter), [turns, gameHistory, filter]);
+  const defaultPlayers = useMemo(() => defaultSelectedPlayers(filtered), [filtered]);
+  const effectiveSelectedPlayers = selectedPlayers.length > 0 ? selectedPlayers : defaultPlayers;
 
-  useEffect(() => {
-    if (selectedPlayers.length === 0 && filtered.length > 0) {
-      setSelectedPlayers(defaultSelectedPlayers(filtered));
-    }
-  }, [filtered, selectedPlayers.length]);
-
-  const trends = useMemo(() => buildPerformanceTrends(filtered, players, selectedPlayers), [filtered, players, selectedPlayers]);
+  const trends = useMemo(
+    () => buildPerformanceTrends(filtered, players, effectiveSelectedPlayers),
+    [filtered, players, effectiveSelectedPlayers]
+  );
   const h2h = useMemo(() => buildHeadToHead(filtered, players, filter.minTurnsThreshold), [filtered, players, filter.minTurnsThreshold]);
   const strategy = useMemo(() => buildPositionStrategy(filtered), [filtered]);
   const summary = useMemo(() => buildPlayerSummary(filtered), [filtered]);
@@ -512,12 +519,19 @@ export default function AnalysisPage() {
         </h2>
         <div className="flex flex-wrap gap-2">
           {Object.values(players).sort((a, b) => b.elo - a.elo).map((p) => {
-            const active = selectedPlayers.includes(p.id);
+            const active = effectiveSelectedPlayers.includes(p.id);
             return (
               <button
                 key={p.id}
                 type="button"
-                onClick={() => setSelectedPlayers((ids) => (active ? ids.filter((id) => id !== p.id) : [...ids, p.id]))}
+                onClick={() =>
+                  setSelectedPlayers((ids) => {
+                    const base = ids.length > 0 ? ids : defaultPlayers;
+                    return base.includes(p.id)
+                      ? base.filter((id) => id !== p.id)
+                      : [...base, p.id];
+                  })
+                }
                 className={`text-xs px-2 py-1 rounded border ${active ? 'bg-amber-600 border-amber-500 text-white' : 'bg-gray-900 border-gray-700 text-gray-300'}`}
               >
                 {p.name}
@@ -531,7 +545,7 @@ export default function AnalysisPage() {
         title="Performance Trends (Net Elo)"
         titleHelp="Shows cumulative net Elo over time for selected players. Hover or tap the chart to inspect exact values at a turn."
         series={trends.series}
-        selected={selectedPlayers}
+        selected={effectiveSelectedPlayers}
         players={players}
         timeWindow={trendWindow}
         onTimeWindowChange={setTrendWindow}

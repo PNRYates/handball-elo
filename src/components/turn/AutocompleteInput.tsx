@@ -1,4 +1,4 @@
-import { useState, useEffect, type RefObject, type KeyboardEvent } from 'react';
+import { useState, type RefObject, type KeyboardEvent } from 'react';
 
 interface Props {
   value: string;
@@ -26,10 +26,6 @@ export default function AutocompleteInput({
   const filtered = query.length > 0
     ? suggestions.filter((s) => s.toLowerCase().startsWith(query))
     : suggestions;
-
-  useEffect(() => {
-    setSelectedIndex(0);
-  }, [value]);
 
   const safeIndex = filtered.length > 0 ? selectedIndex % filtered.length : 0;
 
@@ -77,7 +73,10 @@ export default function AutocompleteInput({
         ref={inputRef}
         type="text"
         value={value}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={(e) => {
+          setSelectedIndex(0);
+          onChange(e.target.value);
+        }}
         onKeyDown={handleKeyDown}
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}

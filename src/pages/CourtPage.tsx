@@ -14,7 +14,6 @@ export default function CourtPage() {
   const court = useGameStore((s) => s.court);
   const players = useGameStore((s) => s.players);
   const turns = useGameStore((s) => s.turns);
-  const turnNumber = useGameStore((s) => s.turnNumber);
   const recordTurn = useGameStore((s) => s.recordTurn);
   const undoLastTurn = useGameStore((s) => s.undoLastTurn);
   const redoLastTurn = useGameStore((s) => s.redoLastTurn);
@@ -87,10 +86,13 @@ export default function CourtPage() {
     setNewPlayerName('');
   }, []);
 
-  // Auto-reset on turn advance
   useEffect(() => {
-    resetSelection();
-  }, [turnNumber, resetSelection]);
+    return useGameStore.subscribe((nextState, prevState) => {
+      if (nextState.turnNumber !== prevState.turnNumber) {
+        resetSelection();
+      }
+    });
+  }, [resetSelection]);
 
   const handleConfirm = useCallback(
     (nameOverride?: string) => {
