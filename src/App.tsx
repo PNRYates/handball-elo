@@ -112,7 +112,7 @@ export default function App() {
           setUser(null);
         }}
       />
-      <main className="max-w-lg mx-auto px-4 py-6">
+      <main className="max-w-xl mx-auto px-4 py-6">
         <Routes>
           <Route path="/" element={<CourtPage />} />
           <Route path="/leaderboard" element={<LeaderboardPage />} />

@@ -26,6 +26,7 @@ interface GameStore extends PersistedGameState {
   undoLastTurn: () => void;
   endGame: () => void;
   resetAllData: () => void;
+  deleteGameFromHistory: (gameId: number) => void;
   renamePlayer: (oldId: string, newName: string) => void;
   hydrateFromRemote: (state: PersistedGameState) => void;
   setTheme: (theme: 'dark' | 'light') => void;
@@ -165,14 +166,14 @@ export const useGameStore = create<GameStore>((set, get) => ({
       turnNumber: state.turnNumber,
     };
 
-        const result = processTurn(
-          state.court,
-          state.players,
-          eliminatedPos,
-          killerPos,
-          newPlayerName,
-          state.requireKiller
-        );
+    const result = processTurn(
+      state.court,
+      state.players,
+      eliminatedPos,
+      killerPos,
+      newPlayerName,
+      state.requireKiller
+    );
 
     const turn: Turn = {
       turnNumber: state.turnNumber,
@@ -213,8 +214,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const state = get();
     if (!state.gameInProgress || state.turns.length === 0) return;
 
+    const nextGameId = state.gameHistory.reduce((maxId, game) => Math.max(maxId, game.id), 0) + 1;
     const completedGame: CompletedGame = {
-      id: state.gameHistory.length + 1,
+      id: nextGameId,
       startedAt: state.gameStartedAt ?? state.turns[0].timestamp,
       endedAt: Date.now(),
       turns: [...state.turns],
@@ -236,6 +238,13 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
   resetAllData: () => {
     set(createInitialState());
+  },
+
+  deleteGameFromHistory: (gameId) => {
+    const state = get();
+    set({
+      gameHistory: state.gameHistory.filter((game) => game.id !== gameId),
+    });
   },
 
   renamePlayer: (oldId, newName) => {

@@ -60,6 +60,7 @@ export default function HistoryPage() {
   const players = useGameStore((s) => s.players);
   const gameHistory = useGameStore((s) => s.gameHistory);
   const gameInProgress = useGameStore((s) => s.gameInProgress);
+  const deleteGameFromHistory = useGameStore((s) => s.deleteGameFromHistory);
 
   const hasAny = turns.length > 0 || gameHistory.length > 0;
 
@@ -126,6 +127,17 @@ export default function HistoryPage() {
                     {game.turns.map((turn) => (
                       <TurnItem key={turn.turnNumber} turn={turn} players={players} />
                     ))}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (window.confirm(`Delete Game #${game.id} from history?`)) {
+                          deleteGameFromHistory(game.id);
+                        }
+                      }}
+                      className="text-xs text-gray-500 hover:text-red-400 transition-colors mt-2"
+                    >
+                      Delete Game
+                    </button>
                   </div>
                 </details>
               );

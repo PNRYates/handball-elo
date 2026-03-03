@@ -18,7 +18,7 @@ interface NavBarProps {
 export default function NavBar({ userEmail, syncLabel, onLogout }: NavBarProps) {
   return (
     <nav className="bg-gray-900 border-b border-gray-800">
-      <div className="max-w-lg mx-auto px-4 py-2 flex items-center justify-between gap-3">
+      <div className="max-w-xl mx-auto px-4 py-2 flex items-center justify-between gap-3">
         <div className="min-w-0">
           <p className="text-xs text-gray-400 truncate">{userEmail}</p>
           <p className="text-[11px] text-gray-500">{syncLabel}</p>
@@ -31,7 +31,7 @@ export default function NavBar({ userEmail, syncLabel, onLogout }: NavBarProps) 
           Sign out
         </button>
       </div>
-      <div className="max-w-lg mx-auto flex overflow-x-auto">
+      <div className="max-w-xl mx-auto flex overflow-x-auto">
         {links.map((link) => (
           <NavLink
             key={link.to}
