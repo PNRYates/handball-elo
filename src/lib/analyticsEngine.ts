@@ -285,7 +285,10 @@ export function buildPositionStrategy(turns: TimelineTurn[]): PositionStrategyMe
 
   for (const { turn } of turns) {
     eliminations[turn.eliminatedPosition] += 1;
-    kills[turn.killerPosition] += 1;
+    const hasDirectKill = turn.eloChanges.some((change) => change.reason === 'elimination_kill');
+    if (hasDirectKill) {
+      kills[turn.killerPosition] += 1;
+    }
   }
 
   const eliminationByPosition = buildRateRows(eliminations, total);
@@ -313,6 +316,8 @@ export function buildPlayerSummary(turns: TimelineTurn[]): PlayerSummary {
   for (const { gameId, turn } of turns) {
     games.add(gameId);
     turn.courtBefore.forEach((id) => uniquePlayers.add(id));
+    turn.courtAfter.forEach((id) => uniquePlayers.add(id));
+    turn.eloChanges.forEach((change) => uniquePlayers.add(change.playerId));
   }
 
   return {
