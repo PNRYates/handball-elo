@@ -132,3 +132,48 @@ test('buildPlayerSummary handles empty and non-empty datasets', () => {
   assert.equal(summary.totalTurns, filtered.length);
   assert.ok(summary.uniquePlayers >= 1);
 });
+
+test('buildPositionStrategy does not attribute kill conversion in no-killer turns', () => {
+  const noKillerTurn: Turn = {
+    turnNumber: 0,
+    timestamp: Date.now(),
+    courtBefore: ['a', 'b', 'c', 'd'],
+    eliminatedPlayerId: 'c',
+    eliminatedPosition: 2,
+    killerPlayerId: 'a',
+    killerPosition: 0,
+    newPlayerId: 'e',
+    courtAfter: ['a', 'b', 'd', 'e'],
+    eloChanges: [
+      { playerId: 'c', previousElo: 1000, newElo: 984, delta: -16, reason: 'elimination_death' },
+      { playerId: 'a', previousElo: 1000, newElo: 1006, delta: 6, reason: 'survival' },
+      { playerId: 'b', previousElo: 1000, newElo: 1005, delta: 5, reason: 'survival' },
+      { playerId: 'd', previousElo: 1000, newElo: 1005, delta: 5, reason: 'survival' },
+    ],
+  };
+  const timeline = [{ gameId: 1, gameLabel: 'Game #1', turn: noKillerTurn }];
+  const metrics = buildPositionStrategy(timeline);
+
+  assert.equal(metrics.killsByPosition.reduce((s, r) => s + r.count, 0), 0);
+});
+
+test('buildPlayerSummary includes players appearing only in courtAfter', () => {
+  const turn: Turn = {
+    turnNumber: 0,
+    timestamp: Date.now(),
+    courtBefore: ['a', 'b', 'c', 'd'],
+    eliminatedPlayerId: 'd',
+    eliminatedPosition: 3,
+    killerPlayerId: 'a',
+    killerPosition: 0,
+    newPlayerId: 'e',
+    courtAfter: ['a', 'b', 'c', 'e'],
+    eloChanges: [
+      { playerId: 'a', previousElo: 1000, newElo: 1010, delta: 10, reason: 'elimination_kill' },
+      { playerId: 'd', previousElo: 1000, newElo: 990, delta: -10, reason: 'elimination_death' },
+    ],
+  };
+
+  const summary = buildPlayerSummary([{ gameId: 1, gameLabel: 'Game #1', turn }]);
+  assert.equal(summary.uniquePlayers, 5);
+});
