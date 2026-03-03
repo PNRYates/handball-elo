@@ -1,12 +1,33 @@
 @import "tailwindcss";
 
+:root {
+  color-scheme: dark;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+  background: #030712;
+}
+
+body {
+  margin: 0;
+  overscroll-behavior-y: none;
+}
+
 :root[data-theme='light'] {
   color-scheme: light;
 }
 
+:root[data-theme='light'] html,
 :root[data-theme='light'] body {
   background: #f3f4f6;
   color: #111827;
+}
+
+:root[data-theme='light'] #root {
+  background: #f3f4f6;
 }
 
 :root[data-theme='light'] .bg-gray-950 {

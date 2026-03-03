@@ -177,13 +177,8 @@ export default function CourtPage() {
     <div className="space-y-4">
       {isMobile && (
         <MobileSpeedPanel
-          requireKiller={requireKiller}
-          killerPos={killerPos}
-          eliminatedPos={eliminatedPos}
           canUndo={canUndo}
           canRedo={canRedo}
-          onPickKiller={(pos) => setKillerPos(pos)}
-          onPickEliminated={handlePositionPress}
           onUndo={undoLastTurn}
           onRedo={redoLastTurn}
         />
@@ -211,8 +206,8 @@ export default function CourtPage() {
         onQuickSwapPick={handleQuickSwapPick}
         showQuickSwap={isMobile}
       />
-      <div className="hidden md:flex gap-2">
-        {canUndo && (
+      <div className="flex gap-2">
+        {!isMobile && canUndo && (
           <button
             onClick={undoLastTurn}
             className="flex-1 text-sm bg-gray-800 border border-gray-700 hover:border-gray-600 text-gray-400 py-2 rounded-lg transition-colors"
@@ -220,7 +215,7 @@ export default function CourtPage() {
             Undo Last Turn
           </button>
         )}
-        {canRedo && (
+        {!isMobile && canRedo && (
           <button
             onClick={redoLastTurn}
             className="flex-1 text-sm bg-gray-800 border border-gray-700 hover:border-gray-600 text-gray-400 py-2 rounded-lg transition-colors"
@@ -234,7 +229,7 @@ export default function CourtPage() {
               endGame();
             }
           }}
-          className="flex-1 text-sm bg-gray-800 border border-gray-700 hover:border-amber-600 text-gray-400 py-2 rounded-lg transition-colors"
+          className={`${isMobile ? 'w-full' : 'flex-1'} text-sm bg-gray-800 border border-gray-700 hover:border-amber-600 text-gray-400 py-2 rounded-lg transition-colors`}
         >
           End Game
         </button>
