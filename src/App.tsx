@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Routes, Route } from 'react-router-dom';
+import { Routes, Route, useLocation } from 'react-router-dom';
 import NavBar from './components/ui/NavBar';
 import CourtPage from './pages/CourtPage';
 import LeaderboardPage from './pages/LeaderboardPage';
@@ -38,6 +38,7 @@ function LoginView({ error }: { error: string | null }) {
 }
 
 export default function App() {
+  const location = useLocation();
   const theme = useGameStore((s) => s.theme);
   const [authLoading, setAuthLoading] = useState(true);
   const [authError, setAuthError] = useState<string | null>(null);
@@ -100,6 +101,7 @@ export default function App() {
         : syncStatus === 'error'
           ? 'Sync error'
           : 'Synced';
+  const isAnalysisRoute = location.pathname === '/analysis';
 
   return (
     <div className="min-h-screen bg-gray-950 text-gray-100">
@@ -112,7 +114,7 @@ export default function App() {
           setUser(null);
         }}
       />
-      <main className="max-w-xl mx-auto px-4 py-6">
+      <main className={`${isAnalysisRoute ? 'max-w-7xl' : 'max-w-xl'} mx-auto px-4 py-6`}>
         <Routes>
           <Route path="/" element={<CourtPage />} />
           <Route path="/leaderboard" element={<LeaderboardPage />} />

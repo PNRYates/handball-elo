@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useGameStore } from '../store/gameStore';
 import type { Turn } from '../types';
 
@@ -61,6 +62,9 @@ export default function HistoryPage() {
   const gameHistory = useGameStore((s) => s.gameHistory);
   const gameInProgress = useGameStore((s) => s.gameInProgress);
   const deleteGameFromHistory = useGameStore((s) => s.deleteGameFromHistory);
+  const renameGameInHistory = useGameStore((s) => s.renameGameInHistory);
+  const [editingGameId, setEditingGameId] = useState<number | null>(null);
+  const [draftGameName, setDraftGameName] = useState('');
 
   const hasAny = turns.length > 0 || gameHistory.length > 0;
 
@@ -71,6 +75,22 @@ export default function HistoryPage() {
   }
 
   const reversedHistory = [...gameHistory].reverse();
+
+  const startEditGameName = (gameId: number, name?: string | null) => {
+    setEditingGameId(gameId);
+    setDraftGameName(name ?? '');
+  };
+
+  const saveGameName = (gameId: number) => {
+    renameGameInHistory(gameId, draftGameName);
+    setEditingGameId(null);
+    setDraftGameName('');
+  };
+
+  const cancelGameName = () => {
+    setEditingGameId(null);
+    setDraftGameName('');
+  };
 
   return (
     <div className="space-y-6">
@@ -109,7 +129,7 @@ export default function HistoryPage() {
                 <details key={game.id} className="group">
                   <summary className="cursor-pointer bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5 flex items-center justify-between list-none">
                     <div>
-                      <span className="font-medium text-sm">Game #{game.id}</span>
+                      <span className="font-medium text-sm">{game.name || `Game #${game.id}`}</span>
                       <span className="text-xs text-gray-500 ml-2">
                         {dateStr} {timeStr}
                       </span>
@@ -124,13 +144,44 @@ export default function HistoryPage() {
                     </div>
                   </summary>
                   <div className="mt-2 space-y-2 pl-2 border-l border-gray-800">
+                    <div>
+                      {editingGameId === game.id ? (
+                        <input
+                          autoFocus
+                          value={draftGameName}
+                          onChange={(e) => setDraftGameName(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              saveGameName(game.id);
+                            }
+                            if (e.key === 'Escape') {
+                              e.preventDefault();
+                              cancelGameName();
+                            }
+                          }}
+                          onBlur={() => saveGameName(game.id)}
+                          className="w-full max-w-xs bg-gray-900 border border-gray-700 rounded px-2 py-1 text-sm"
+                          placeholder={`Game #${game.id}`}
+                        />
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => startEditGameName(game.id, game.name)}
+                          className="text-xs text-gray-500 hover:text-amber-400 transition-colors"
+                        >
+                          {game.name ? 'Rename Game' : 'Name Game'}
+                        </button>
+                      )}
+                    </div>
                     {game.turns.map((turn) => (
                       <TurnItem key={turn.turnNumber} turn={turn} players={players} />
                     ))}
                     <button
                       type="button"
                       onClick={() => {
-                        if (window.confirm(`Delete Game #${game.id} from history?`)) {
+                        const label = game.name || `Game #${game.id}`;
+                        if (window.confirm(`Delete ${label} from history?`)) {
                           deleteGameFromHistory(game.id);
                         }
                       }}
