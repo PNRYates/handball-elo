@@ -96,7 +96,7 @@ export default function LeaderboardPage() {
               </div>
             </div>
             <div className="text-right shrink-0 ml-3 flex items-center gap-2">
-              <div className="font-mono font-bold text-lg">{player.elo}</div>
+              <div className="font-mono font-bold text-lg">{player.elo.toFixed(1)}</div>
               <button
                 type="button"
                 onClick={() => hidePlayer(player.id)}

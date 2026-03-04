@@ -104,7 +104,7 @@ export default function TurnRecorder({
           </div>
           {isReturningPlayer && !newPlayerOnCourt && (
             <p className="text-xs text-amber-400 mt-1">
-              Returning player ({players[newPlayerName.trim().toLowerCase()].elo} ELO)
+              Returning player ({players[newPlayerName.trim().toLowerCase()].elo.toFixed(1)} ELO)
             </p>
           )}
           {newPlayerOnCourt && (

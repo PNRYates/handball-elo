@@ -46,7 +46,7 @@ function TurnItem({ turn, players }: { turn: Turn; players: Record<string, { nam
             <span key={change.playerId} className="text-xs">
               <span className="text-gray-400">{name}</span>{' '}
               <span className={color}>
-                {change.delta > 0 ? '+' : ''}{change.delta}
+                {change.delta > 0 ? '+' : ''}{change.delta.toFixed(1)}
               </span>
             </span>
           );

@@ -87,7 +87,7 @@ export default function InitialSetup() {
                       onClick={() => fillPlayer(i, p.name)}
                       className="text-[clamp(0.72rem,2.4vw,0.9rem)] bg-gray-800 border border-gray-700 hover:border-amber-500 text-gray-400 hover:text-amber-300 px-[clamp(0.55rem,2vw,0.85rem)] py-[clamp(0.35rem,1.2vw,0.55rem)] rounded-md transition-colors whitespace-nowrap"
                     >
-                      {p.name} <span className="text-gray-600">{p.elo}</span>
+                      {p.name} <span className="text-gray-600">{p.elo.toFixed(1)}</span>
                     </button>
                   ))}
                 </div>

@@ -96,7 +96,7 @@ export function processTurn(
     const survivorTotal = eloChanges
       .filter((change) => change.reason === 'survival')
       .reduce((sum, change) => sum + change.delta, 0);
-    const targetKillerDelta = Math.round(survivorTotal * 3);
+    const targetKillerDelta = Math.round(survivorTotal * 3 * 1000) / 1000;
 
     const killerChange = eloChanges.find(
       (change) => change.playerId === killerId && change.reason === 'elimination_kill'
@@ -133,11 +133,15 @@ export function processTurn(
       reason: 'elimination_death',
     });
 
-    const baseShare = Math.floor(survivorPool / survivorIds.length);
-    const remainder = survivorPool % survivorIds.length;
+    const baseShare = Math.round((survivorPool / survivorIds.length) * 1000) / 1000;
+    let distributed = 0;
 
     survivorIds.forEach((id, idx) => {
-      const share = baseShare + (idx < remainder ? 1 : 0);
+      const isLast = idx === survivorIds.length - 1;
+      const share = isLast
+        ? Math.round((survivorPool - distributed) * 1000) / 1000
+        : baseShare;
+      distributed += share;
       if (share === 0) return;
       const prev = updatedPlayers[id].elo;
       updatedPlayers[id].elo += share;

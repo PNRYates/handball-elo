@@ -67,7 +67,7 @@ export default function PositionCard({
         </span>
       )}
       <div className="text-right shrink-0">
-        <div className="text-sm font-mono font-bold">{player.elo}</div>
+        <div className="text-sm font-mono font-bold">{player.elo.toFixed(1)}</div>
       </div>
     </button>
   );
