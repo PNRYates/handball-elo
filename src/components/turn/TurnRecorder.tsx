@@ -49,6 +49,7 @@ export default function TurnRecorder({
 
   const killer = killerPos !== null ? players[court[killerPos]] : null;
   const eliminated = players[court[eliminatedPos]];
+  const isSelfKill = requireKiller && killerPos !== null && killerPos === eliminatedPos;
   if (!eliminated) return null;
   if (requireKiller && !killer) return null;
 
@@ -64,10 +65,17 @@ export default function TurnRecorder({
       {/* Summary */}
       <p className="text-sm">
         {requireKiller && killer ? (
-          <>
-            <span className="text-green-400 font-medium">{killer.name}</span>
-            <span className="text-gray-500"> eliminated </span>
-          </>
+          isSelfKill ? (
+            <>
+              <span className="text-amber-400 font-medium">{killer.name}</span>
+              <span className="text-gray-500"> self-eliminated </span>
+            </>
+          ) : (
+            <>
+              <span className="text-green-400 font-medium">{killer.name}</span>
+              <span className="text-gray-500"> eliminated </span>
+            </>
+          )
         ) : (
           <span className="text-gray-500">Eliminated: </span>
         )}

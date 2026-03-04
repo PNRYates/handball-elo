@@ -149,6 +149,8 @@ export default function App() {
         setWorkspaces([
           { id: DEFAULT_WORKSPACE_ID, name: DEFAULT_WORKSPACE_NAME, updatedAt: new Date().toISOString() },
         ]);
+        setActiveWorkspaceId(DEFAULT_WORKSPACE_ID);
+        localStorage.setItem(WORKSPACE_ID_KEY, DEFAULT_WORKSPACE_ID);
       }
     } catch (error) {
       setSession(null);
@@ -163,6 +165,14 @@ export default function App() {
   useEffect(() => {
     void bootAuth();
   }, [bootAuth]);
+
+  useEffect(() => {
+    if (sampleMode || !user || workspaces.length > 0) return;
+    const now = new Date().toISOString();
+    setWorkspaces([{ id: DEFAULT_WORKSPACE_ID, name: DEFAULT_WORKSPACE_NAME, updatedAt: now }]);
+    setActiveWorkspaceId(DEFAULT_WORKSPACE_ID);
+    localStorage.setItem(WORKSPACE_ID_KEY, DEFAULT_WORKSPACE_ID);
+  }, [sampleMode, user, workspaces.length]);
 
   const handleSwitchWorkspace = useCallback((id: string) => {
     setActiveWorkspaceId(id);
@@ -301,4 +311,3 @@ export default function App() {
     </div>
   );
 }
-

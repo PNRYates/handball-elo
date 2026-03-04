@@ -94,24 +94,6 @@ export function processTurn(
         });
       }
     }
-
-    // Tune scoring so killer gain is 3x the total passive survivor gain each turn.
-    const survivorTotal = eloChanges
-      .filter((change) => change.reason === 'survival')
-      .reduce((sum, change) => sum + change.delta, 0);
-    const targetKillerDelta = Math.round(survivorTotal * 3 * 1000) / 1000;
-
-    const killerChange = eloChanges.find(
-      (change) => change.playerId === killerId && change.reason === 'elimination_kill'
-    );
-    if (killerChange) {
-      const killerAdjustment = targetKillerDelta - killerChange.delta;
-      if (killerAdjustment !== 0) {
-        updatedPlayers[killerId].elo += killerAdjustment;
-        killerChange.delta += killerAdjustment;
-        killerChange.newElo = updatedPlayers[killerId].elo;
-      }
-    }
   } else {
     // No-killer mode, or self-kill in killer mode (#1 server kills self):
     // eliminated player is scored against the average of the 3 survivors,

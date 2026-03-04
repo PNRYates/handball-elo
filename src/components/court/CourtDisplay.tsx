@@ -51,11 +51,13 @@ export default function CourtDisplay({
         if (!player) return null;
         const pos = i as CourtPosition;
         const selectionState =
-          pos === killerPos
-            ? 'killer' as const
-            : pos === eliminatedPos
-              ? 'eliminated' as const
-              : 'none' as const;
+          pos === killerPos && pos === eliminatedPos
+            ? 'self' as const
+            : pos === killerPos
+              ? 'killer' as const
+              : pos === eliminatedPos
+                ? 'eliminated' as const
+                : 'none' as const;
         return (
           <PositionCard
             key={playerId}

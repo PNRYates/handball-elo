@@ -14,20 +14,45 @@ function createPlayers(): Record<string, Player> {
   };
 }
 
-test('killer mode: killer gets 3x survivor total and turn remains zero-sum', () => {
+test('killer mode: killer delta is ELO-based and turn remains zero-sum', () => {
   const players = createPlayers();
   const result = processTurn(['a', 'b', 'c', 'd'], players, 3, 0, 'Eve', true);
 
-  const survivorTotal = result.eloChanges
-    .filter((c) => c.reason === 'survival')
-    .reduce((sum, c) => sum + c.delta, 0);
   const killerDelta = result.eloChanges.find((c) => c.reason === 'elimination_kill')?.delta ?? 0;
   const netMilli = result.eloChanges.reduce((sum, c) => sum + Math.round(c.delta * 1000), 0);
 
-  assert.equal(killerDelta, survivorTotal * 3);
+  // With equal ratings (all 1000), expected score = 0.5, so killerDelta = K * (1 - 0.5) = 16
+  assert.equal(killerDelta, 16);
   assert.equal(netMilli, 0);
   assert.deepEqual(result.newCourt, ['a', 'b', 'c', 'eve']);
   assert.equal(result.newPlayer?.id, 'eve');
+});
+
+test('killer mode: higher-rated killer gains less ELO than lower-rated killer', () => {
+  const now = Date.now();
+  const highKillerPlayers: Record<string, Player> = {
+    a: { id: 'a', name: 'Alice', elo: 1400, gamesPlayed: 0, eliminations: 0, timesEliminated: 0, createdAt: now },
+    b: { id: 'b', name: 'Bob', elo: 1000, gamesPlayed: 0, eliminations: 0, timesEliminated: 0, createdAt: now },
+    c: { id: 'c', name: 'Cara', elo: 1000, gamesPlayed: 0, eliminations: 0, timesEliminated: 0, createdAt: now },
+    d: { id: 'd', name: 'Dan', elo: 1000, gamesPlayed: 0, eliminations: 0, timesEliminated: 0, createdAt: now },
+    e: { id: 'e', name: 'Eve', elo: 1000, gamesPlayed: 0, eliminations: 0, timesEliminated: 0, createdAt: now },
+  };
+  const lowKillerPlayers: Record<string, Player> = {
+    a: { id: 'a', name: 'Alice', elo: 600, gamesPlayed: 0, eliminations: 0, timesEliminated: 0, createdAt: now },
+    b: { id: 'b', name: 'Bob', elo: 1000, gamesPlayed: 0, eliminations: 0, timesEliminated: 0, createdAt: now },
+    c: { id: 'c', name: 'Cara', elo: 1000, gamesPlayed: 0, eliminations: 0, timesEliminated: 0, createdAt: now },
+    d: { id: 'd', name: 'Dan', elo: 1000, gamesPlayed: 0, eliminations: 0, timesEliminated: 0, createdAt: now },
+    e: { id: 'e', name: 'Eve', elo: 1000, gamesPlayed: 0, eliminations: 0, timesEliminated: 0, createdAt: now },
+  };
+
+  const highRatedKillerResult = processTurn(['a', 'b', 'c', 'd'], highKillerPlayers, 3, 0, 'Eve', true);
+  const lowRatedKillerResult = processTurn(['a', 'b', 'c', 'd'], lowKillerPlayers, 3, 0, 'Eve', true);
+
+  const highRatedKillerDelta = highRatedKillerResult.eloChanges.find((c) => c.reason === 'elimination_kill')?.delta ?? 0;
+  const lowRatedKillerDelta = lowRatedKillerResult.eloChanges.find((c) => c.reason === 'elimination_kill')?.delta ?? 0;
+
+  // A lower-rated killer should gain more ELO for the same elimination than a higher-rated killer
+  assert.ok(lowRatedKillerDelta > highRatedKillerDelta, `lowRatedKillerDelta (${lowRatedKillerDelta}) should be > highRatedKillerDelta (${highRatedKillerDelta})`);
 });
 
 test('position #1 elimination gets second chance and rotates to #4', () => {
@@ -54,22 +79,30 @@ test('killer mode allows #1 self-kill and scores it like no-killer mode', () => 
   assert.deepEqual(result.newCourt, ['b', 'c', 'd', 'a']);
 });
 
-test('killer mode allows non-#1 self-kill and scores it like no-killer mode', () => {
-  const players = createPlayers();
-  const result = processTurn(['a', 'b', 'c', 'd'], players, 2, 2, 'Eve', true);
+test('killer mode allows non-#1 self-kill on every square and scores like no-killer mode', () => {
+  const expectations: Record<number, [string, string, string, string]> = {
+    1: ['a', 'c', 'd', 'eve'],
+    2: ['a', 'b', 'd', 'eve'],
+    3: ['a', 'b', 'c', 'eve'],
+  };
 
-  const hasKillerChange = result.eloChanges.some((c) => c.reason === 'elimination_kill');
-  const eliminatedDelta = result.eloChanges.find((c) => c.reason === 'elimination_death')?.delta ?? 0;
-  const survivorTotal = result.eloChanges
-    .filter((c) => c.reason === 'survival')
-    .reduce((sum, c) => sum + c.delta, 0);
-  const netMilli = result.eloChanges.reduce((sum, c) => sum + Math.round(c.delta * 1000), 0);
+  ([1, 2, 3] as const).forEach((eliminatedPos) => {
+    const players = createPlayers();
+    const result = processTurn(['a', 'b', 'c', 'd'], players, eliminatedPos, eliminatedPos, 'Eve', true);
 
-  assert.equal(hasKillerChange, false);
-  assert.equal(eliminatedDelta < 0, true);
-  assert.equal(survivorTotal, -eliminatedDelta);
-  assert.equal(netMilli, 0);
-  assert.deepEqual(result.newCourt, ['a', 'b', 'd', 'eve']);
+    const hasKillerChange = result.eloChanges.some((c) => c.reason === 'elimination_kill');
+    const eliminatedDelta = result.eloChanges.find((c) => c.reason === 'elimination_death')?.delta ?? 0;
+    const survivorTotal = result.eloChanges
+      .filter((c) => c.reason === 'survival')
+      .reduce((sum, c) => sum + c.delta, 0);
+    const netMilli = result.eloChanges.reduce((sum, c) => sum + Math.round(c.delta * 1000), 0);
+
+    assert.equal(hasKillerChange, false);
+    assert.equal(eliminatedDelta < 0, true);
+    assert.equal(survivorTotal, -eliminatedDelta);
+    assert.equal(netMilli, 0);
+    assert.deepEqual(result.newCourt, expectations[eliminatedPos]);
+  });
 });
 
 test('no-killer mode: eliminated loss is split across 3 survivors', () => {
