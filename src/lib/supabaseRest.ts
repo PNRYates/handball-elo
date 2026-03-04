@@ -1,4 +1,5 @@
 import type { PersistedGameState } from '../store/gameStore';
+import type { Workspace } from '../types';
 
 const SESSION_STORAGE_KEY = 'handball-elo-session';
 const EXPIRY_BUFFER_SECONDS = 60;
@@ -205,11 +206,13 @@ function restHeaders(session: SupabaseSession): HeadersInit {
 
 export async function loadRemoteState(
   userId: string,
+  workspaceId: string,
   session: SupabaseSession
 ): Promise<PersistedGameState | null> {
   const query = new URL(`${getSupabaseUrl()}/rest/v1/user_game_state`);
   query.searchParams.set('select', 'state');
   query.searchParams.set('user_id', `eq.${userId}`);
+  query.searchParams.set('workspace_id', `eq.${workspaceId}`);
   query.searchParams.set('limit', '1');
 
   const res = await fetch(query.toString(), {
@@ -230,6 +233,8 @@ export async function loadRemoteState(
 
 export async function saveRemoteState(
   userId: string,
+  workspaceId: string,
+  workspaceName: string,
   state: PersistedGameState,
   session: SupabaseSession
 ): Promise<void> {
@@ -241,6 +246,8 @@ export async function saveRemoteState(
     },
     body: JSON.stringify({
       user_id: userId,
+      workspace_id: workspaceId,
+      workspace_name: workspaceName,
       state,
       updated_at: new Date().toISOString(),
     }),
@@ -248,5 +255,102 @@ export async function saveRemoteState(
 
   if (!res.ok) {
     throw new Error('Failed to save game state to DB');
+  }
+}
+
+export async function listWorkspaces(
+  userId: string,
+  session: SupabaseSession
+): Promise<Workspace[]> {
+  const query = new URL(`${getSupabaseUrl()}/rest/v1/user_game_state`);
+  query.searchParams.set('select', 'workspace_id,workspace_name,updated_at');
+  query.searchParams.set('user_id', `eq.${userId}`);
+  query.searchParams.set('order', 'updated_at.desc');
+
+  const res = await fetch(query.toString(), {
+    headers: restHeaders(session),
+  });
+
+  if (!res.ok) {
+    throw new Error('Failed to list workspaces');
+  }
+
+  const rows = (await res.json()) as Array<{
+    workspace_id: string;
+    workspace_name: string;
+    updated_at: string;
+  }>;
+
+  return rows.map((r) => ({
+    id: r.workspace_id,
+    name: r.workspace_name,
+    updatedAt: r.updated_at,
+  }));
+}
+
+export async function createWorkspace(
+  userId: string,
+  workspaceId: string,
+  workspaceName: string,
+  initialState: PersistedGameState,
+  session: SupabaseSession
+): Promise<void> {
+  const res = await fetch(`${getSupabaseUrl()}/rest/v1/user_game_state`, {
+    method: 'POST',
+    headers: {
+      ...restHeaders(session),
+      Prefer: 'resolution=merge-duplicates,return=minimal',
+    },
+    body: JSON.stringify({
+      user_id: userId,
+      workspace_id: workspaceId,
+      workspace_name: workspaceName,
+      state: initialState,
+      updated_at: new Date().toISOString(),
+    }),
+  });
+
+  if (!res.ok) {
+    throw new Error('Failed to create workspace');
+  }
+}
+
+export async function deleteWorkspace(
+  userId: string,
+  workspaceId: string,
+  session: SupabaseSession
+): Promise<void> {
+  const query = new URL(`${getSupabaseUrl()}/rest/v1/user_game_state`);
+  query.searchParams.set('user_id', `eq.${userId}`);
+  query.searchParams.set('workspace_id', `eq.${workspaceId}`);
+
+  const res = await fetch(query.toString(), {
+    method: 'DELETE',
+    headers: restHeaders(session),
+  });
+
+  if (!res.ok) {
+    throw new Error('Failed to delete workspace');
+  }
+}
+
+export async function renameWorkspace(
+  userId: string,
+  workspaceId: string,
+  newName: string,
+  session: SupabaseSession
+): Promise<void> {
+  const query = new URL(`${getSupabaseUrl()}/rest/v1/user_game_state`);
+  query.searchParams.set('user_id', `eq.${userId}`);
+  query.searchParams.set('workspace_id', `eq.${workspaceId}`);
+
+  const res = await fetch(query.toString(), {
+    method: 'PATCH',
+    headers: restHeaders(session),
+    body: JSON.stringify({ workspace_name: newName }),
+  });
+
+  if (!res.ok) {
+    throw new Error('Failed to rename workspace');
   }
 }
