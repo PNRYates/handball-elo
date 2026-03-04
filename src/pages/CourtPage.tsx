@@ -50,11 +50,9 @@ export default function CourtPage() {
     court.includes(newPlayerName.trim().toLowerCase());
   const fallbackKillerPos = (eliminatedPos === 0 ? 1 : 0) as CourtPosition;
   const effectiveKillerPos = requireKiller ? killerPos : (eliminatedPos !== null ? fallbackKillerPos : null);
-  const isAllowedSelfKill = requireKiller && effectiveKillerPos === 0 && eliminatedPos === 0;
   const canSubmit =
     effectiveKillerPos !== null &&
     eliminatedPos !== null &&
-    (effectiveKillerPos !== eliminatedPos || isAllowedSelfKill) &&
     (!needsNewPlayer || (newPlayerName.trim().length > 0 && !newPlayerOnCourt));
 
   const reserves = Object.values(players)
@@ -99,8 +97,6 @@ export default function CourtPage() {
     (nameOverride?: string) => {
       const name = nameOverride ?? newPlayerName.trim();
       if (effectiveKillerPos === null || eliminatedPos === null) return;
-      const allowSelfKill = requireKiller && effectiveKillerPos === 0 && eliminatedPos === 0;
-      if (effectiveKillerPos === eliminatedPos && !allowSelfKill) return;
       if (needsNewPlayer && !name) return;
       if (needsNewPlayer && court.includes(name.toLowerCase())) return;
       recordTurn(
@@ -109,7 +105,7 @@ export default function CourtPage() {
         needsNewPlayer ? name : undefined
       );
     },
-    [effectiveKillerPos, eliminatedPos, needsNewPlayer, newPlayerName, court, recordTurn, requireKiller]
+    [effectiveKillerPos, eliminatedPos, needsNewPlayer, newPlayerName, court, recordTurn]
   );
 
   const handlePositionPress = useCallback(
@@ -126,8 +122,6 @@ export default function CourtPage() {
       if (killerPos === null) {
         setKillerPos(pos);
       } else if (eliminatedPos === null) {
-        const allowSelfKill = killerPos === 0 && pos === 0;
-        if (pos === killerPos && !allowSelfKill) return;
         setEliminatedPos(pos);
         if (pos !== 0) {
           setTimeout(() => inputRef.current?.focus(), 0);

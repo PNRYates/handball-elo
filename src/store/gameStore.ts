@@ -243,8 +243,6 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const state = get();
     if (!state.gameInProgress) return;
     if (eliminatedPos < 0 || eliminatedPos > 3 || killerPos < 0 || killerPos > 3) return;
-    const isAllowedSelfKill = state.requireKiller && eliminatedPos === 0 && killerPos === 0;
-    if (state.requireKiller && eliminatedPos === killerPos && !isAllowedSelfKill) return;
 
     const trimmedReplacement = newPlayerName?.trim() ?? '';
     if (eliminatedPos !== 0) {
