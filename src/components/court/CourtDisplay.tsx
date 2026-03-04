@@ -1,4 +1,4 @@
-import { useGameStore } from '../../store/gameStore';
+import { useGameStore, selectActiveWorkspace } from '../../store/gameStore';
 import type { CourtPosition } from '../../types';
 import PositionCard from './PositionCard';
 
@@ -30,10 +30,10 @@ export default function CourtDisplay({
   phase,
   interactive = true,
 }: Props) {
-  const court = useGameStore((s) => s.court);
-  const players = useGameStore((s) => s.players);
-  const turnNumber = useGameStore((s) => s.turnNumber);
-  const requireKiller = useGameStore((s) => s.requireKiller);
+  const court = useGameStore((s) => selectActiveWorkspace(s).court);
+  const players = useGameStore((s) => selectActiveWorkspace(s).players);
+  const turnNumber = useGameStore((s) => selectActiveWorkspace(s).turnNumber);
+  const requireKiller = useGameStore((s) => selectActiveWorkspace(s).requireKiller);
   const prompt = !requireKiller && phase === 'select_eliminated'
     ? 'Press 1–4: Who was eliminated?'
     : phasePrompts[phase];

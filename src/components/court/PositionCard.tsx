@@ -1,4 +1,5 @@
 import type { Player } from '../../types';
+import { formatRating } from '../../lib/rating';
 
 type SelectionState = 'none' | 'killer' | 'eliminated' | 'self';
 
@@ -72,7 +73,7 @@ export default function PositionCard({
         </span>
       )}
       <div className="text-right shrink-0">
-        <div className="text-sm font-mono font-bold">{player.elo.toFixed(1)}</div>
+        <div className="text-sm font-mono font-bold">{formatRating(player.elo)}</div>
       </div>
     </button>
   );

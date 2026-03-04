@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { useGameStore } from '../store/gameStore';
+import { selectActiveWorkspace, useGameStore } from '../store/gameStore';
 import type { Turn } from '../types';
+import { formatDelta } from '../lib/rating';
 
 function TurnItem({ turn, players }: { turn: Turn; players: Record<string, { name: string }> }) {
   const eliminated = players[turn.eliminatedPlayerId]?.name ?? turn.eliminatedPlayerId;
@@ -47,7 +48,7 @@ function TurnItem({ turn, players }: { turn: Turn; players: Record<string, { nam
             <span key={change.playerId} className="text-xs">
               <span className="text-gray-400">{name}</span>{' '}
               <span className={color}>
-                {change.delta > 0 ? '+' : ''}{change.delta.toFixed(1)}
+                {formatDelta(change.delta)}
               </span>
             </span>
           );
@@ -58,10 +59,10 @@ function TurnItem({ turn, players }: { turn: Turn; players: Record<string, { nam
 }
 
 export default function HistoryPage() {
-  const turns = useGameStore((s) => s.turns);
-  const players = useGameStore((s) => s.players);
-  const gameHistory = useGameStore((s) => s.gameHistory);
-  const gameInProgress = useGameStore((s) => s.gameInProgress);
+  const turns = useGameStore((s) => selectActiveWorkspace(s).turns);
+  const players = useGameStore((s) => selectActiveWorkspace(s).players);
+  const gameHistory = useGameStore((s) => selectActiveWorkspace(s).gameHistory);
+  const gameInProgress = useGameStore((s) => selectActiveWorkspace(s).gameInProgress);
   const deleteGameFromHistory = useGameStore((s) => s.deleteGameFromHistory);
   const renameGameInHistory = useGameStore((s) => s.renameGameInHistory);
   const [editingGameId, setEditingGameId] = useState<number | null>(null);

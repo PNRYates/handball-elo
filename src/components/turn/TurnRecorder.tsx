@@ -1,7 +1,8 @@
 import type { RefObject } from 'react';
-import { useGameStore } from '../../store/gameStore';
+import { selectActiveWorkspace, useGameStore } from '../../store/gameStore';
 import type { CourtPosition } from '../../types';
 import type { SelectionPhase } from '../court/CourtDisplay';
+import { formatRating } from '../../lib/rating';
 import AutocompleteInput from './AutocompleteInput';
 import QuickSwapChips from './QuickSwapChips';
 
@@ -40,8 +41,8 @@ export default function TurnRecorder({
   onQuickSwapPick,
   showQuickSwap,
 }: Props) {
-  const court = useGameStore((s) => s.court);
-  const players = useGameStore((s) => s.players);
+  const court = useGameStore((s) => selectActiveWorkspace(s).court);
+  const players = useGameStore((s) => selectActiveWorkspace(s).players);
 
   // Nothing to show until at least eliminated selected (and killer if required)
   if (eliminatedPos === null) return null;
@@ -49,9 +50,9 @@ export default function TurnRecorder({
 
   const killer = killerPos !== null ? players[court[killerPos]] : null;
   const eliminated = players[court[eliminatedPos]];
-  const isSelfKill = requireKiller && killerPos !== null && killerPos === eliminatedPos;
   if (!eliminated) return null;
   if (requireKiller && !killer) return null;
+  const isSelfKill = requireKiller && killer?.id === eliminated.id;
 
   const isReturningPlayer =
     newPlayerName.trim().length > 0 &&
@@ -112,7 +113,7 @@ export default function TurnRecorder({
           </div>
           {isReturningPlayer && !newPlayerOnCourt && (
             <p className="text-xs text-amber-400 mt-1">
-              Returning player ({players[newPlayerName.trim().toLowerCase()].elo.toFixed(1)} ELO)
+              Returning player ({formatRating(players[newPlayerName.trim().toLowerCase()].elo)} ELO)
             </p>
           )}
           {newPlayerOnCourt && (

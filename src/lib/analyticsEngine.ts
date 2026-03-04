@@ -1,3 +1,4 @@
+import { roundToInternal } from './rating.ts';
 import type { CompletedGame, Turn } from '../types';
 import type {
   AnalyticsFilterState,
@@ -16,10 +17,6 @@ function getPlayerDelta(turn: Turn, playerId: string): number {
   return turn.eloChanges
     .filter((c) => c.playerId === playerId)
     .reduce((sum, c) => sum + c.delta, 0);
-}
-
-function round2(n: number): number {
-  return Math.round(n * 100) / 100;
 }
 
 function isDirectKillTurn(turn: Turn): boolean {
@@ -169,12 +166,12 @@ export function buildPerformanceTrends(
       }
       const mean = deltas.reduce((s, d) => s + d, 0) / deltas.length;
       const variance = deltas.reduce((s, d) => s + (d - mean) ** 2, 0) / deltas.length;
-      return {
-        playerId: id,
-        playerName: players[id]?.name ?? id,
-        volatility: round2(Math.sqrt(variance)),
-        averageDelta: round2(mean),
-      };
+        return {
+          playerId: id,
+          playerName: players[id]?.name ?? id,
+          volatility: roundToInternal(Math.sqrt(variance)),
+          averageDelta: roundToInternal(mean),
+        };
     })
     .sort((a, b) => b.volatility - a.volatility);
 
@@ -217,11 +214,13 @@ export function buildHeadToHead(
         const deltaB = getPlayerDelta(turn, existing.playerBId);
         existing.netEloAminusB += deltaA - deltaB;
 
-        if (turn.killerPlayerId === existing.playerAId && turn.eliminatedPlayerId === existing.playerBId) {
-          existing.killsAonB += 1;
-        }
-        if (turn.killerPlayerId === existing.playerBId && turn.eliminatedPlayerId === existing.playerAId) {
-          existing.killsBonA += 1;
+        if (isDirectKillTurn(turn)) {
+          if (turn.killerPlayerId === existing.playerAId && turn.eliminatedPlayerId === existing.playerBId) {
+            existing.killsAonB += 1;
+          }
+          if (turn.killerPlayerId === existing.playerBId && turn.eliminatedPlayerId === existing.playerAId) {
+            existing.killsBonA += 1;
+          }
         }
 
         map.set(key, existing);
@@ -234,8 +233,8 @@ export function buildHeadToHead(
       const denom = row.killsBonA === 0 ? Math.max(row.killsAonB, 1) : row.killsBonA;
       return {
         ...row,
-        killRatioA: round2(row.killsAonB / denom),
-        netEloAminusB: round2(row.netEloAminusB),
+        killRatioA: roundToInternal(row.killsAonB / denom),
+        netEloAminusB: roundToInternal(row.netEloAminusB),
       };
     })
     .filter((row) => row.turnsTogether >= minTurnsThreshold)
@@ -264,7 +263,7 @@ function buildRotationEfficiency(turns: TimelineTurn[]): RotationEfficiencyRow[]
 
   return [0, 1, 2, 3].map((pos) => ({
     position: pos as 0 | 1 | 2 | 3,
-    avgDelta: samples[pos] > 0 ? round2(totals[pos] / samples[pos]) : 0,
+    avgDelta: samples[pos] > 0 ? roundToInternal(totals[pos] / samples[pos]) : 0,
     sampleSize: samples[pos],
   }));
 }
@@ -298,7 +297,7 @@ function buildEntryImpact(turns: TimelineTurn[]): EntryImpactMetrics {
 
   return {
     entries: entries.length,
-    averageThreeTurnNet: round2(total / entries.length),
+    averageThreeTurnNet: roundToInternal(total / entries.length),
   };
 }
 
@@ -347,7 +346,7 @@ export function buildPlayerSummary(turns: TimelineTurn[]): PlayerSummary {
     totalTurns: turns.length,
     uniquePlayers: uniquePlayers.size,
     totalGamesRepresented: games.size,
-    avgTurnsPerGame: games.size > 0 ? round2(turns.length / games.size) : 0,
+    avgTurnsPerGame: games.size > 0 ? roundToInternal(turns.length / games.size) : 0,
   };
 }
 

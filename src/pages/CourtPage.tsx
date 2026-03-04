@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { useGameStore } from '../store/gameStore';
+import { useGameStore, selectActiveWorkspace } from '../store/gameStore';
 import type { CourtPosition } from '../types';
 import type { SelectionPhase } from '../components/court/CourtDisplay';
 import InitialSetup from '../components/setup/InitialSetup';
@@ -8,19 +8,19 @@ import TurnRecorder from '../components/turn/TurnRecorder';
 import MobileSpeedPanel from '../components/court/MobileSpeedPanel';
 
 export default function CourtPage() {
-  const requireKiller = useGameStore((s) => s.requireKiller);
-  const showReserveButtons = useGameStore((s) => s.showReserveButtons);
-  const gameInProgress = useGameStore((s) => s.gameInProgress);
-  const court = useGameStore((s) => s.court);
-  const players = useGameStore((s) => s.players);
-  const turns = useGameStore((s) => s.turns);
+  const requireKiller = useGameStore((s) => selectActiveWorkspace(s).requireKiller);
+  const showReserveButtons = useGameStore((s) => selectActiveWorkspace(s).showReserveButtons);
+  const gameInProgress = useGameStore((s) => selectActiveWorkspace(s).gameInProgress);
+  const court = useGameStore((s) => selectActiveWorkspace(s).court);
+  const players = useGameStore((s) => selectActiveWorkspace(s).players);
+  const turns = useGameStore((s) => selectActiveWorkspace(s).turns);
   const recordTurn = useGameStore((s) => s.recordTurn);
   const undoLastTurn = useGameStore((s) => s.undoLastTurn);
   const redoLastTurn = useGameStore((s) => s.redoLastTurn);
   const endGame = useGameStore((s) => s.endGame);
-  const undoStack = useGameStore((s) => s.undoStack);
-  const redoStack = useGameStore((s) => s.redoStack);
-  const recentEntrants = useGameStore((s) => s.recentEntrants);
+  const undoStack = useGameStore((s) => selectActiveWorkspace(s).undoStack);
+  const redoStack = useGameStore((s) => selectActiveWorkspace(s).redoStack);
+  const recentEntrants = useGameStore((s) => selectActiveWorkspace(s).recentEntrants);
 
   const [killerPos, setKillerPos] = useState<CourtPosition | null>(null);
   const [eliminatedPos, setEliminatedPos] = useState<CourtPosition | null>(null);
@@ -87,7 +87,7 @@ export default function CourtPage() {
 
   useEffect(() => {
     return useGameStore.subscribe((nextState, prevState) => {
-      if (nextState.turnNumber !== prevState.turnNumber) {
+      if (selectActiveWorkspace(nextState).turnNumber !== selectActiveWorkspace(prevState).turnNumber) {
         resetSelection();
       }
     });

@@ -20,7 +20,7 @@ import {
   type SupabaseUser,
 } from './lib/supabaseRest';
 import { useRemoteSync } from './lib/useRemoteSync';
-import { useGameStore } from './store/gameStore';
+import { useGameStore, selectActiveWorkspace, sanitizePersistedGameState } from './store/gameStore';
 import { buildSampleState } from './lib/sampleData';
 import type { Workspace } from './types';
 
@@ -61,7 +61,7 @@ function LoginView({ error, onUseSample }: { error: string | null; onUseSample: 
 
 export default function App() {
   const location = useLocation();
-  const theme = useGameStore((s) => s.theme);
+  const theme = useGameStore((s) => selectActiveWorkspace(s).theme);
   const resetAllData = useGameStore((s) => s.resetAllData);
   const hydrateFromRemote = useGameStore((s) => s.hydrateFromRemote);
   const [authLoading, setAuthLoading] = useState(true);
@@ -184,9 +184,9 @@ export default function App() {
       if (!user || !session) return;
       const id = generateWorkspaceId();
       const now = new Date().toISOString();
-      const initial = useGameStore.getState();
+      const initial = selectActiveWorkspace(useGameStore.getState());
       try {
-        await createWorkspace(user.id, id, name, {
+        await createWorkspace(user.id, id, name, sanitizePersistedGameState({
           players: {},
           court: ['', '', '', ''],
           turns: [],
@@ -203,7 +203,7 @@ export default function App() {
           redoStack: [],
           recentEntrants: [],
           hiddenPlayerIds: [],
-        }, session);
+        }), session);
         const newWorkspace: Workspace = { id, name, updatedAt: now };
         setWorkspaces((prev) => [...prev, newWorkspace]);
         handleSwitchWorkspace(id);

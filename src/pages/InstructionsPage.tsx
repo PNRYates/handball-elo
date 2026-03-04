@@ -15,6 +15,7 @@ export default function InstructionsPage() {
       <section className="bg-gray-800 border border-gray-700 rounded-lg p-4 space-y-2">
         <h2 className="font-medium">Recording a turn</h2>
         <p className="text-sm text-gray-400">Default mode: select killer first, then eliminated player.</p>
+        <p className="text-sm text-gray-400">Self-kills are supported in killer mode (same killer and eliminated player).</p>
         <p className="text-sm text-gray-400">If eliminated player is not #1, enter who comes in at #4.</p>
         <p className="text-sm text-gray-400">Confirm to apply ELO changes and move court positions.</p>
       </section>

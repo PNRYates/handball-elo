@@ -1,5 +1,6 @@
 import type { CompletedGame, CourtPosition, Player, Turn } from '../types';
 import type { PersistedGameState } from '../store/gameStore';
+import { sanitizePersistedGameState } from '../store/gameStore.ts';
 import { processTurn } from './gameEngine.ts';
 
 const SAMPLE_NAMES = [
@@ -118,7 +119,7 @@ export function buildSampleState(): PersistedGameState {
     });
   }
 
-  return {
+  return sanitizePersistedGameState({
     players,
     court: ['', '', '', ''],
     turns: [],
@@ -135,5 +136,5 @@ export function buildSampleState(): PersistedGameState {
     redoStack: [],
     recentEntrants: [],
     hiddenPlayerIds: [],
-  };
+  });
 }

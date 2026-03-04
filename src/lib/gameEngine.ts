@@ -1,9 +1,9 @@
 import type { CourtPosition, Player, EloChange } from '../types';
 import {
-  calculateEliminationElo,
   calculateEliminationVsAverageElo,
-  calculateSurvivalBonus,
+  calculateKillerModeDistribution,
 } from './elo.ts';
+import { roundToInternal } from './rating.ts';
 
 export interface TurnResult {
   newCourt: [string, string, string, string];
@@ -12,6 +12,29 @@ export interface TurnResult {
   eloChanges: EloChange[];
 }
 
+function applyPlayerDelta(
+  updatedPlayers: Record<string, Player>,
+  playerId: string,
+  delta: number
+): { previousElo: number; newElo: number; appliedDelta: number } {
+  const previousElo = roundToInternal(updatedPlayers[playerId].elo);
+  const newElo = roundToInternal(previousElo + roundToInternal(delta));
+  updatedPlayers[playerId].elo = newElo;
+  return {
+    previousElo,
+    newElo,
+    appliedDelta: roundToInternal(newElo - previousElo),
+  };
+}
+
+function splitPool(survivorPool: number, survivorCount: number): number[] {
+  const pool = roundToInternal(survivorPool);
+  if (survivorCount <= 0) return [];
+  const shares = Array.from({ length: survivorCount }, () => roundToInternal(pool / survivorCount));
+  const allocated = shares.reduce((sum, share) => roundToInternal(sum + share), 0);
+  shares[shares.length - 1] = roundToInternal(shares[shares.length - 1] + (pool - allocated));
+  return shares;
+}
 const toMilliElo = (value: number): number => Math.round(value * 1000);
 const fromMilliElo = (value: number): number => value / 1000;
 
@@ -40,103 +63,86 @@ export function processTurn(
 
   const eloChanges: EloChange[] = [];
   if (requireKiller && !isSelfKill) {
-    // 1. Elimination ELO (killer-based mode)
-    const { killerDelta, eliminatedDelta } = calculateEliminationElo(
+    // Identify the two bystanders (not killer, not eliminated).
+    const bystanderIds: string[] = [];
+    for (let i = 0; i < 4; i++) {
+      if (i !== eliminatedPos && i !== killerPos) bystanderIds.push(court[i]);
+    }
+
+    // Pool-based distribution: eliminated player's loss funds all gains.
+    const { eliminatedDelta, killerDelta, bystanderDeltas } = calculateKillerModeDistribution(
+      updatedPlayers[eliminatedId].elo,
       updatedPlayers[killerId].elo,
-      updatedPlayers[eliminatedId].elo
+      bystanderIds.map((id) => updatedPlayers[id].elo)
     );
 
-    const killerPrev = updatedPlayers[killerId].elo;
-    updatedPlayers[killerId].elo += killerDelta;
+    const killerApplied = applyPlayerDelta(updatedPlayers, killerId, killerDelta);
     updatedPlayers[killerId].eliminations += 1;
     eloChanges.push({
       playerId: killerId,
-      previousElo: killerPrev,
-      newElo: updatedPlayers[killerId].elo,
-      delta: killerDelta,
+      previousElo: killerApplied.previousElo,
+      newElo: killerApplied.newElo,
+      delta: killerApplied.appliedDelta,
       reason: 'elimination_kill',
     });
 
-    const elimPrev = updatedPlayers[eliminatedId].elo;
-    updatedPlayers[eliminatedId].elo += eliminatedDelta;
+    const elimApplied = applyPlayerDelta(updatedPlayers, eliminatedId, eliminatedDelta);
     updatedPlayers[eliminatedId].timesEliminated += 1;
     eloChanges.push({
       playerId: eliminatedId,
-      previousElo: elimPrev,
-      newElo: updatedPlayers[eliminatedId].elo,
-      delta: eliminatedDelta,
+      previousElo: elimApplied.previousElo,
+      newElo: elimApplied.newElo,
+      delta: elimApplied.appliedDelta,
       reason: 'elimination_death',
     });
 
-    // 2. Survival bonuses for bystanders (not killer, not eliminated)
-    const avgRating =
-      court.map((id) => players[id].elo).reduce((a, b) => a + b, 0) / 4;
-
-    for (let i = 0; i < 4; i++) {
-      const pid = court[i];
-      if (pid === eliminatedId || pid === killerId) continue;
-
-      const isPos1 = i === 0;
-      const bonus = calculateSurvivalBonus(
-        updatedPlayers[pid].elo,
-        avgRating,
-        isPos1
-      );
-      if (bonus !== 0) {
-        const prev = updatedPlayers[pid].elo;
-        updatedPlayers[pid].elo += bonus;
-        eloChanges.push({
-          playerId: pid,
-          previousElo: prev,
-          newElo: updatedPlayers[pid].elo,
-          delta: bonus,
-          reason: 'survival',
-        });
-      }
-    }
+    bystanderIds.forEach((id, idx) => {
+      const delta = bystanderDeltas[idx];
+      if (delta === 0) return;
+      const applied = applyPlayerDelta(updatedPlayers, id, delta);
+      eloChanges.push({
+        playerId: id,
+        previousElo: applied.previousElo,
+        newElo: applied.newElo,
+        delta: applied.appliedDelta,
+        reason: 'survival',
+      });
+    });
   } else {
-    // No-killer mode, or self-kill in killer mode (#1 server kills self):
+    // No-killer mode, or self-kill in killer mode:
     // eliminated player is scored against the average of the 3 survivors,
     // and any ELO loss is split across those 3 survivors.
     const survivorIds = court.filter((id) => id !== eliminatedId);
     const survivorAvg =
-      survivorIds.reduce((sum, id) => sum + updatedPlayers[id].elo, 0) / survivorIds.length;
+      roundToInternal(
+        survivorIds.reduce((sum, id) => sum + updatedPlayers[id].elo, 0) / survivorIds.length
+      );
 
     const { eliminatedDelta, survivorPool } = calculateEliminationVsAverageElo(
       updatedPlayers[eliminatedId].elo,
       survivorAvg
     );
 
-    const elimPrev = updatedPlayers[eliminatedId].elo;
-    updatedPlayers[eliminatedId].elo += eliminatedDelta;
+    const elimApplied = applyPlayerDelta(updatedPlayers, eliminatedId, eliminatedDelta);
     updatedPlayers[eliminatedId].timesEliminated += 1;
     eloChanges.push({
       playerId: eliminatedId,
-      previousElo: elimPrev,
-      newElo: updatedPlayers[eliminatedId].elo,
-      delta: eliminatedDelta,
+      previousElo: elimApplied.previousElo,
+      newElo: elimApplied.newElo,
+      delta: elimApplied.appliedDelta,
       reason: 'elimination_death',
     });
 
-    const survivorPoolMilli = toMilliElo(survivorPool);
-    const baseShareMilli = Math.floor(survivorPoolMilli / survivorIds.length);
-    let distributedMilli = 0;
-
+    const shares = splitPool(survivorPool, survivorIds.length);
     survivorIds.forEach((id, idx) => {
-      const isLast = idx === survivorIds.length - 1;
-      const shareMilli = isLast
-        ? survivorPoolMilli - distributedMilli
-        : baseShareMilli;
-      distributedMilli += shareMilli;
-      const share = fromMilliElo(shareMilli);
+      const share = shares[idx];
       if (share === 0) return;
-      const prev = updatedPlayers[id].elo;
-      updatedPlayers[id].elo = fromMilliElo(toMilliElo(updatedPlayers[id].elo) + shareMilli);
+      const applied = applyPlayerDelta(updatedPlayers, id, share);
       eloChanges.push({
         playerId: id,
-        previousElo: prev,
-        newElo: updatedPlayers[id].elo,
-        delta: share,
+        previousElo: applied.previousElo,
+        newElo: applied.newElo,
+        delta: applied.appliedDelta,
         reason: 'survival',
       });
     });

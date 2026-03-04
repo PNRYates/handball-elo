@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { processTurn } from '../src/lib/gameEngine.ts';
+import { roundToInternal } from '../src/lib/rating.ts';
 import type { Player } from '../src/types/index.ts';
 
 function createPlayers(): Record<string, Player> {
@@ -14,45 +15,40 @@ function createPlayers(): Record<string, Player> {
   };
 }
 
-test('killer mode: killer delta is ELO-based and turn remains zero-sum', () => {
+test('killer mode: turn is zero-sum and killer earns more than each bystander', () => {
   const players = createPlayers();
   const result = processTurn(['a', 'b', 'c', 'd'], players, 3, 0, 'Eve', true);
 
+  const survivorDeltas = result.eloChanges
+    .filter((c) => c.reason === 'survival')
+    .map((c) => c.delta);
   const killerDelta = result.eloChanges.find((c) => c.reason === 'elimination_kill')?.delta ?? 0;
   const netMilli = result.eloChanges.reduce((sum, c) => sum + Math.round(c.delta * 1000), 0);
 
-  // With equal ratings (all 1000), expected score = 0.5, so killerDelta = K * (1 - 0.5) = 16
-  assert.equal(killerDelta, 16);
+  // All gains come from the eliminated player's pool.
+  assert.ok(killerDelta > 0);
+  assert.ok(survivorDeltas.every((d) => d > 0));
+  assert.ok(survivorDeltas.every((d) => killerDelta > d));
   assert.equal(netMilli, 0);
   assert.deepEqual(result.newCourt, ['a', 'b', 'c', 'eve']);
   assert.equal(result.newPlayer?.id, 'eve');
 });
 
-test('killer mode: higher-rated killer gains less ELO than lower-rated killer', () => {
-  const now = Date.now();
-  const highKillerPlayers: Record<string, Player> = {
-    a: { id: 'a', name: 'Alice', elo: 1400, gamesPlayed: 0, eliminations: 0, timesEliminated: 0, createdAt: now },
-    b: { id: 'b', name: 'Bob', elo: 1000, gamesPlayed: 0, eliminations: 0, timesEliminated: 0, createdAt: now },
-    c: { id: 'c', name: 'Cara', elo: 1000, gamesPlayed: 0, eliminations: 0, timesEliminated: 0, createdAt: now },
-    d: { id: 'd', name: 'Dan', elo: 1000, gamesPlayed: 0, eliminations: 0, timesEliminated: 0, createdAt: now },
-    e: { id: 'e', name: 'Eve', elo: 1000, gamesPlayed: 0, eliminations: 0, timesEliminated: 0, createdAt: now },
-  };
-  const lowKillerPlayers: Record<string, Player> = {
-    a: { id: 'a', name: 'Alice', elo: 600, gamesPlayed: 0, eliminations: 0, timesEliminated: 0, createdAt: now },
-    b: { id: 'b', name: 'Bob', elo: 1000, gamesPlayed: 0, eliminations: 0, timesEliminated: 0, createdAt: now },
-    c: { id: 'c', name: 'Cara', elo: 1000, gamesPlayed: 0, eliminations: 0, timesEliminated: 0, createdAt: now },
-    d: { id: 'd', name: 'Dan', elo: 1000, gamesPlayed: 0, eliminations: 0, timesEliminated: 0, createdAt: now },
-    e: { id: 'e', name: 'Eve', elo: 1000, gamesPlayed: 0, eliminations: 0, timesEliminated: 0, createdAt: now },
-  };
+test('killer mode: with equal ratings killer gets 2x each bystander', () => {
+  const players = createPlayers(); // all 1000
+  const result = processTurn(['a', 'b', 'c', 'd'], players, 3, 0, 'Eve', true);
 
-  const highRatedKillerResult = processTurn(['a', 'b', 'c', 'd'], highKillerPlayers, 3, 0, 'Eve', true);
-  const lowRatedKillerResult = processTurn(['a', 'b', 'c', 'd'], lowKillerPlayers, 3, 0, 'Eve', true);
+  const survivorDeltas = result.eloChanges
+    .filter((c) => c.reason === 'survival')
+    .map((c) => c.delta)
+    .sort((a, b) => a - b);
+  const killerDelta = result.eloChanges.find((c) => c.reason === 'elimination_kill')?.delta ?? 0;
+  const eliminatedDelta = result.eloChanges.find((c) => c.reason === 'elimination_death')?.delta ?? 0;
 
-  const highRatedKillerDelta = highRatedKillerResult.eloChanges.find((c) => c.reason === 'elimination_kill')?.delta ?? 0;
-  const lowRatedKillerDelta = lowRatedKillerResult.eloChanges.find((c) => c.reason === 'elimination_kill')?.delta ?? 0;
-
-  // A lower-rated killer should gain more ELO for the same elimination than a higher-rated killer
-  assert.ok(lowRatedKillerDelta > highRatedKillerDelta, `lowRatedKillerDelta (${lowRatedKillerDelta}) should be > highRatedKillerDelta (${highRatedKillerDelta})`);
+  assert.equal(eliminatedDelta, -16);
+  assert.equal(killerDelta, 8);
+  assert.deepEqual(survivorDeltas, [4, 4]);
+  assert.equal(result.eloChanges.reduce((sum, c) => sum + c.delta, 0), 0);
 });
 
 test('position #1 elimination gets second chance and rotates to #4', () => {
@@ -126,30 +122,27 @@ test('no-killer mode: eliminated loss is split across 3 survivors', () => {
   assert.deepEqual(result.newCourt, ['a', 'b', 'd', 'eve']);
 });
 
-
-test('no-killer mode keeps milli-ELO survivor split stable after fractional rounds', () => {
+test('processTurn keeps elo values and deltas at 3-decimal precision', () => {
   const players = createPlayers();
+  players.a.elo = 1011.127;
+  players.b.elo = 987.913;
+  players.c.elo = 1004.421;
+  players.d.elo = 998.227;
+  const result = processTurn(['a', 'b', 'c', 'd'], players, 2, 0, 'Eve', true);
 
-  // Seed fractional ratings first (from an earlier no-killer style turn).
-  players.a.elo = 1005.333;
-  players.b.elo = 998.667;
-  players.c.elo = 1002.777;
-  players.d.elo = 993.223;
+  const precisionOk = Object.values(result.updatedPlayers).every(
+    (p) => roundToInternal(p.elo) === p.elo
+  );
+  const changesPrecisionOk = result.eloChanges.every(
+    (c) =>
+      roundToInternal(c.previousElo) === c.previousElo &&
+      roundToInternal(c.newElo) === c.newElo &&
+      roundToInternal(c.delta) === c.delta
+  );
 
-  const result = processTurn(['a', 'b', 'c', 'd'], players, 3, 0, 'Eve', false);
-
-  const survivorDeltas = result.eloChanges
-    .filter((c) => c.reason === 'survival')
-    .map((c) => c.delta)
-    .sort((a, b) => a - b);
-  const netMilli = result.eloChanges.reduce((sum, c) => sum + Math.round(c.delta * 1000), 0);
-
-  for (const delta of result.eloChanges.map((c) => c.delta)) {
-    assert.equal(Number(delta.toFixed(3)), delta);
-  }
-
-  assert.deepEqual(survivorDeltas, [5.194, 5.194, 5.196]);
-  assert.equal(netMilli, 0);
+  assert.equal(precisionOk, true);
+  assert.equal(changesPrecisionOk, true);
+  assert.equal(roundToInternal(result.eloChanges.reduce((sum, c) => sum + c.delta, 0)), 0);
 });
 
 test('processTurn does not mutate original input players map', () => {

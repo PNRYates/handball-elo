@@ -1,9 +1,24 @@
 import { create } from 'zustand';
-import type { Player, Turn, CourtPosition, GameSnapshot, CompletedGame } from '../types';
+import type { AnalyticsFilterState, AnalyticsScope } from '../types/analytics';
+import type { CompletedGame, CourtPosition, GameSnapshot, Player, Turn } from '../types';
 import { processTurn } from '../lib/gameEngine.ts';
+import { roundToInternal } from '../lib/rating.ts';
 
 const MAX_TURN_STACK = 100;
 const MAX_RECENT_ENTRANTS = 10;
+const STATE_VERSION = 2;
+const DEFAULT_WORKSPACE_ID = 'default';
+const DEFAULT_WORKSPACE_NAME = 'Default Workspace';
+
+const DEFAULT_ANALYTICS_FILTER: AnalyticsFilterState = {
+  scope: 'all_time',
+  includeCurrentGame: true,
+  minTurnsThreshold: 5,
+  rangeStartGameId: null,
+  rangeEndGameId: null,
+  dateStart: null,
+  dateEnd: null,
+};
 
 export interface TurnStateSnapshot {
   players: Record<string, Player>;
@@ -14,7 +29,21 @@ export interface TurnStateSnapshot {
   recentEntrants: string[];
 }
 
-export interface PersistedGameState {
+export interface WorkspaceAnalyticsState {
+  filter: AnalyticsFilterState;
+  selectedPlayers: string[];
+  h2hSort: 'volume' | 'net' | 'ratio';
+  h2hPlayers: string[];
+  trendWindow: 'all' | '50' | '20';
+  tableRowsVisible: number;
+  h2hRowsVisible: number;
+}
+
+export interface WorkspaceState {
+  id: string;
+  name: string;
+  createdAt: number;
+  updatedAt: number;
   players: Record<string, Player>;
   court: [string, string, string, string];
   turns: Turn[];
@@ -31,6 +60,13 @@ export interface PersistedGameState {
   redoStack: TurnStateSnapshot[];
   recentEntrants: string[];
   hiddenPlayerIds: string[];
+  analytics: WorkspaceAnalyticsState;
+}
+
+export interface PersistedGameState {
+  version: number;
+  activeWorkspaceId: string;
+  workspaces: Record<string, WorkspaceState>;
 }
 
 interface GameStore extends PersistedGameState {
@@ -52,10 +88,57 @@ interface GameStore extends PersistedGameState {
   setTheme: (theme: 'dark' | 'light') => void;
   setRequireKiller: (requireKiller: boolean) => void;
   setShowReserveButtons: (showReserveButtons: boolean) => void;
+  setAnalyticsFilter: (next: AnalyticsFilterState) => void;
+  setSelectedPlayers: (next: string[]) => void;
+  setH2hSort: (next: 'volume' | 'net' | 'ratio') => void;
+  setH2hPlayers: (next: string[]) => void;
+  setTrendWindow: (next: 'all' | '50' | '20') => void;
+  setTableRowsVisible: (next: number) => void;
+  setH2hRowsVisible: (next: number) => void;
+  createWorkspace: (name?: string) => string;
+  renameWorkspace: (workspaceId: string, name: string) => void;
+  deleteWorkspace: (workspaceId: string) => void;
+  switchWorkspace: (workspaceId: string) => void;
 }
 
-function createInitialState(): PersistedGameState {
+function isCourt(value: unknown): value is [string, string, string, string] {
+  return Array.isArray(value) && value.length === 4 && value.every((v) => typeof v === 'string');
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object';
+}
+
+function toFiniteNumber(value: unknown, fallback: number): number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+}
+
+function toNonNegativeInt(value: unknown, fallback: number): number {
+  return Math.max(0, Math.trunc(toFiniteNumber(value, fallback)));
+}
+
+function toPosition(value: unknown, fallback: CourtPosition): CourtPosition {
+  return value === 0 || value === 1 || value === 2 || value === 3 ? value : fallback;
+}
+
+function createDefaultAnalyticsState(): WorkspaceAnalyticsState {
   return {
+    filter: { ...DEFAULT_ANALYTICS_FILTER },
+    selectedPlayers: [],
+    h2hSort: 'volume',
+    h2hPlayers: [],
+    trendWindow: 'all',
+    tableRowsVisible: 12,
+    h2hRowsVisible: 20,
+  };
+}
+
+function createWorkspaceState(id: string, name: string, now = Date.now()): WorkspaceState {
+  return {
+    id,
+    name,
+    createdAt: now,
+    updatedAt: now,
     players: {},
     court: ['', '', '', ''],
     turns: [],
@@ -72,120 +155,396 @@ function createInitialState(): PersistedGameState {
     redoStack: [],
     recentEntrants: [],
     hiddenPlayerIds: [],
+    analytics: createDefaultAnalyticsState(),
   };
+}
+
+function createInitialState(): PersistedGameState {
+  const workspace = createWorkspaceState(DEFAULT_WORKSPACE_ID, DEFAULT_WORKSPACE_NAME);
+  return {
+    version: STATE_VERSION,
+    activeWorkspaceId: workspace.id,
+    workspaces: {
+      [workspace.id]: workspace,
+    },
+  };
+}
+
+function sanitizeAnalyticsFilter(input: unknown): AnalyticsFilterState {
+  if (!isRecord(input)) return { ...DEFAULT_ANALYTICS_FILTER };
+
+  const scope =
+    input.scope === 'all_time' ||
+    input.scope === 'current_game' ||
+    input.scope === 'last_5_games' ||
+    input.scope === 'last_10_games' ||
+    input.scope === 'game_range'
+      ? (input.scope as AnalyticsScope)
+      : DEFAULT_ANALYTICS_FILTER.scope;
+
+  return {
+    scope,
+    includeCurrentGame:
+      typeof input.includeCurrentGame === 'boolean'
+        ? input.includeCurrentGame
+        : DEFAULT_ANALYTICS_FILTER.includeCurrentGame,
+    minTurnsThreshold:
+      typeof input.minTurnsThreshold === 'number' && Number.isFinite(input.minTurnsThreshold)
+        ? Math.max(1, Math.floor(input.minTurnsThreshold))
+        : DEFAULT_ANALYTICS_FILTER.minTurnsThreshold,
+    rangeStartGameId:
+      typeof input.rangeStartGameId === 'number' || input.rangeStartGameId === null
+        ? input.rangeStartGameId
+        : DEFAULT_ANALYTICS_FILTER.rangeStartGameId,
+    rangeEndGameId:
+      typeof input.rangeEndGameId === 'number' || input.rangeEndGameId === null
+        ? input.rangeEndGameId
+        : DEFAULT_ANALYTICS_FILTER.rangeEndGameId,
+    dateStart:
+      typeof input.dateStart === 'string' || input.dateStart === null
+        ? input.dateStart
+        : DEFAULT_ANALYTICS_FILTER.dateStart,
+    dateEnd:
+      typeof input.dateEnd === 'string' || input.dateEnd === null
+        ? input.dateEnd
+        : DEFAULT_ANALYTICS_FILTER.dateEnd,
+  };
+}
+
+function sanitizeAnalyticsState(input: unknown): WorkspaceAnalyticsState {
+  const fallback = createDefaultAnalyticsState();
+  if (!isRecord(input)) return fallback;
+
+  return {
+    filter: sanitizeAnalyticsFilter(input.filter),
+    selectedPlayers: Array.isArray(input.selectedPlayers)
+      ? input.selectedPlayers.filter((id): id is string => typeof id === 'string')
+      : fallback.selectedPlayers,
+    h2hSort:
+      input.h2hSort === 'net' || input.h2hSort === 'ratio' || input.h2hSort === 'volume'
+        ? input.h2hSort
+        : fallback.h2hSort,
+    h2hPlayers: Array.isArray(input.h2hPlayers)
+      ? input.h2hPlayers.filter((id): id is string => typeof id === 'string')
+      : fallback.h2hPlayers,
+    trendWindow:
+      input.trendWindow === '50' || input.trendWindow === '20' || input.trendWindow === 'all'
+        ? input.trendWindow
+        : fallback.trendWindow,
+    tableRowsVisible:
+      typeof input.tableRowsVisible === 'number' && Number.isFinite(input.tableRowsVisible)
+        ? Math.max(1, Math.floor(input.tableRowsVisible))
+        : fallback.tableRowsVisible,
+    h2hRowsVisible:
+      typeof input.h2hRowsVisible === 'number' && Number.isFinite(input.h2hRowsVisible)
+        ? Math.max(1, Math.floor(input.h2hRowsVisible))
+        : fallback.h2hRowsVisible,
+  };
+}
+
+function normalizePlayersMap(input: unknown): Record<string, Player> {
+  if (!isRecord(input)) return {};
+
+  const now = Date.now();
+  const players: Record<string, Player> = {};
+  for (const [key, value] of Object.entries(input)) {
+    if (!isRecord(value)) continue;
+    const id = typeof value.id === 'string' && value.id.trim().length > 0 ? value.id : key;
+    const name = typeof value.name === 'string' && value.name.trim().length > 0 ? value.name : id;
+    players[id] = {
+      id,
+      name,
+      elo: roundToInternal(toFiniteNumber(value.elo, 1000)),
+      gamesPlayed: toNonNegativeInt(value.gamesPlayed, 0),
+      eliminations: toNonNegativeInt(value.eliminations, 0),
+      timesEliminated: toNonNegativeInt(value.timesEliminated, 0),
+      createdAt: toFiniteNumber(value.createdAt, now),
+    };
+  }
+
+  return players;
+}
+
+function normalizeEloChange(input: unknown): Turn['eloChanges'][number] | null {
+  if (!isRecord(input)) return null;
+  const reason =
+    input.reason === 'elimination_kill' ||
+    input.reason === 'elimination_death' ||
+    input.reason === 'survival'
+      ? input.reason
+      : null;
+  if (!reason || typeof input.playerId !== 'string') return null;
+
+  const previousElo = roundToInternal(toFiniteNumber(input.previousElo, 0));
+  const newElo = roundToInternal(toFiniteNumber(input.newElo, previousElo));
+  const delta = roundToInternal(toFiniteNumber(input.delta, roundToInternal(newElo - previousElo)));
+
+  return {
+    playerId: input.playerId,
+    previousElo,
+    newElo,
+    delta,
+    reason,
+  };
+}
+
+function normalizeTurn(input: unknown): Turn | null {
+  if (!isRecord(input) || !isCourt(input.courtBefore) || !isCourt(input.courtAfter)) return null;
+  const eliminatedPosition = toPosition(input.eliminatedPosition, 0);
+  const killerPosition = toPosition(input.killerPosition, 0);
+  const eloChanges = Array.isArray(input.eloChanges)
+    ? input.eloChanges.map(normalizeEloChange).filter((c): c is NonNullable<typeof c> => c !== null)
+    : [];
+
+  return {
+    turnNumber: toNonNegativeInt(input.turnNumber, 0),
+    timestamp: toFiniteNumber(input.timestamp, Date.now()),
+    courtBefore: input.courtBefore,
+    eliminatedPlayerId:
+      typeof input.eliminatedPlayerId === 'string'
+        ? input.eliminatedPlayerId
+        : input.courtBefore[eliminatedPosition],
+    eliminatedPosition,
+    killerPlayerId:
+      typeof input.killerPlayerId === 'string' ? input.killerPlayerId : input.courtBefore[killerPosition],
+    killerPosition,
+    newPlayerId: typeof input.newPlayerId === 'string' ? input.newPlayerId : null,
+    courtAfter: input.courtAfter,
+    eloChanges,
+  };
+}
+
+function normalizeGameSnapshot(input: unknown): GameSnapshot | null {
+  if (!isRecord(input) || !isCourt(input.court) || !isRecord(input.players)) return null;
+  return {
+    players: normalizePlayersMap(input.players),
+    court: input.court,
+    turnNumber: toNonNegativeInt(input.turnNumber, 0),
+  };
+}
+
+function normalizeTurnStateSnapshot(input: unknown): TurnStateSnapshot | null {
+  if (!isRecord(input) || !isCourt(input.court) || !isRecord(input.players)) return null;
+  return {
+    players: normalizePlayersMap(input.players),
+    court: input.court,
+    turns: Array.isArray(input.turns)
+      ? input.turns.map(normalizeTurn).filter((turn): turn is Turn => turn !== null)
+      : [],
+    turnNumber: toNonNegativeInt(input.turnNumber, 0),
+    _lastSnapshot: normalizeGameSnapshot(input._lastSnapshot),
+    recentEntrants: Array.isArray(input.recentEntrants)
+      ? input.recentEntrants.filter((id): id is string => typeof id === 'string')
+      : [],
+  };
+}
+
+function normalizeCompletedGame(input: unknown): CompletedGame | null {
+  if (!isRecord(input) || !isCourt(input.startingCourt) || !isCourt(input.finalCourt)) return null;
+  return {
+    id: toNonNegativeInt(input.id, 0),
+    name: typeof input.name === 'string' ? input.name : null,
+    startedAt: toFiniteNumber(input.startedAt, Date.now()),
+    endedAt: toFiniteNumber(input.endedAt, Date.now()),
+    turns: Array.isArray(input.turns)
+      ? input.turns.map(normalizeTurn).filter((turn): turn is Turn => turn !== null)
+      : [],
+    startingCourt: input.startingCourt,
+    finalCourt: input.finalCourt,
+  };
+}
+
+function sanitizeWorkspaceState(input: unknown, fallbackId: string, fallbackName: string): WorkspaceState {
+  const fallback = createWorkspaceState(fallbackId, fallbackName);
+  if (!isRecord(input)) return fallback;
+
+  return {
+    id: typeof input.id === 'string' && input.id.length > 0 ? input.id : fallback.id,
+    name: typeof input.name === 'string' && input.name.trim().length > 0 ? input.name.trim() : fallback.name,
+    createdAt: toFiniteNumber(input.createdAt, fallback.createdAt),
+    updatedAt: toFiniteNumber(input.updatedAt, fallback.updatedAt),
+    players: normalizePlayersMap(input.players),
+    court: isCourt(input.court) ? input.court : fallback.court,
+    turns: Array.isArray(input.turns)
+      ? input.turns.map(normalizeTurn).filter((turn): turn is Turn => turn !== null)
+      : fallback.turns,
+    turnNumber: toNonNegativeInt(input.turnNumber, fallback.turnNumber),
+    gameInProgress: typeof input.gameInProgress === 'boolean' ? input.gameInProgress : fallback.gameInProgress,
+    gameStartedAt:
+      typeof input.gameStartedAt === 'number' || input.gameStartedAt === null
+        ? input.gameStartedAt
+        : fallback.gameStartedAt,
+    gameHistory: Array.isArray(input.gameHistory)
+      ? input.gameHistory
+          .map(normalizeCompletedGame)
+          .filter((game): game is CompletedGame => game !== null)
+      : fallback.gameHistory,
+    _lastSnapshot: normalizeGameSnapshot(input._lastSnapshot),
+    isInitialized: typeof input.isInitialized === 'boolean' ? input.isInitialized : fallback.isInitialized,
+    theme: input.theme === 'light' ? 'light' : 'dark',
+    requireKiller: typeof input.requireKiller === 'boolean' ? input.requireKiller : fallback.requireKiller,
+    showReserveButtons:
+      typeof input.showReserveButtons === 'boolean'
+        ? input.showReserveButtons
+        : fallback.showReserveButtons,
+    undoStack: Array.isArray(input.undoStack)
+      ? input.undoStack
+          .map(normalizeTurnStateSnapshot)
+          .filter((snap): snap is TurnStateSnapshot => snap !== null)
+      : fallback.undoStack,
+    redoStack: Array.isArray(input.redoStack)
+      ? input.redoStack
+          .map(normalizeTurnStateSnapshot)
+          .filter((snap): snap is TurnStateSnapshot => snap !== null)
+      : fallback.redoStack,
+    recentEntrants: Array.isArray(input.recentEntrants)
+      ? input.recentEntrants.filter((id): id is string => typeof id === 'string')
+      : fallback.recentEntrants,
+    hiddenPlayerIds: Array.isArray(input.hiddenPlayerIds)
+      ? input.hiddenPlayerIds.filter((id): id is string => typeof id === 'string')
+      : fallback.hiddenPlayerIds,
+    analytics: sanitizeAnalyticsState(input.analytics),
+  };
+}
+
+function isLegacySingleWorkspaceState(input: Record<string, unknown>): boolean {
+  return (
+    'players' in input ||
+    'gameHistory' in input ||
+    'turns' in input ||
+    'requireKiller' in input ||
+    'showReserveButtons' in input ||
+    'theme' in input
+  );
+}
+
+function migrateLegacyStateToWorkspace(input: Record<string, unknown>): PersistedGameState {
+  const now = Date.now();
+  const workspace = sanitizeWorkspaceState(
+    {
+      ...input,
+      id: DEFAULT_WORKSPACE_ID,
+      name: DEFAULT_WORKSPACE_NAME,
+      createdAt: now,
+      updatedAt: now,
+    },
+    DEFAULT_WORKSPACE_ID,
+    DEFAULT_WORKSPACE_NAME
+  );
+
+  return {
+    version: STATE_VERSION,
+    activeWorkspaceId: workspace.id,
+    workspaces: {
+      [workspace.id]: workspace,
+    },
+  };
+}
+
+function normalizeWorkspaceName(name: string): string {
+  const trimmed = name.trim();
+  return trimmed.length > 0 ? trimmed : DEFAULT_WORKSPACE_NAME;
+}
+
+function makeWorkspaceId(existing: Record<string, WorkspaceState>, name: string): string {
+  const slug =
+    name
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/(^-|-$)/g, '') || 'workspace';
+  let candidate = `${slug}-${Math.random().toString(36).slice(2, 8)}`;
+  while (existing[candidate]) {
+    candidate = `${slug}-${Math.random().toString(36).slice(2, 8)}`;
+  }
+  return candidate;
+}
+
+function updateWorkspace(
+  state: PersistedGameState,
+  workspaceId: string,
+  updater: (workspace: WorkspaceState) => WorkspaceState
+): PersistedGameState {
+  const workspace = state.workspaces[workspaceId];
+  if (!workspace) return state;
+  const updated = updater(workspace);
+  return {
+    ...state,
+    workspaces: {
+      ...state.workspaces,
+      [workspaceId]: {
+        ...updated,
+        updatedAt: Date.now(),
+      },
+    },
+  };
+}
+
+function createTurnStateSnapshot(workspace: WorkspaceState): TurnStateSnapshot {
+  return {
+    players: JSON.parse(JSON.stringify(workspace.players)),
+    court: [...workspace.court] as [string, string, string, string],
+    turns: JSON.parse(JSON.stringify(workspace.turns)),
+    turnNumber: workspace.turnNumber,
+    _lastSnapshot: workspace._lastSnapshot
+      ? {
+          players: JSON.parse(JSON.stringify(workspace._lastSnapshot.players)),
+          court: [...workspace._lastSnapshot.court] as [string, string, string, string],
+          turnNumber: workspace._lastSnapshot.turnNumber,
+        }
+      : null,
+    recentEntrants: [...workspace.recentEntrants],
+  };
+}
+
+export function selectActiveWorkspace(state: PersistedGameState): WorkspaceState {
+  return (
+    state.workspaces[state.activeWorkspaceId] ??
+    Object.values(state.workspaces)[0] ??
+    createWorkspaceState(DEFAULT_WORKSPACE_ID, DEFAULT_WORKSPACE_NAME)
+  );
 }
 
 export function getPersistedGameState(state: PersistedGameState): PersistedGameState {
   return {
-    players: state.players,
-    court: state.court,
-    turns: state.turns,
-    turnNumber: state.turnNumber,
-    gameInProgress: state.gameInProgress,
-    gameStartedAt: state.gameStartedAt,
-    gameHistory: state.gameHistory,
-    _lastSnapshot: state._lastSnapshot,
-    isInitialized: state.isInitialized,
-    theme: state.theme,
-    requireKiller: state.requireKiller,
-    showReserveButtons: state.showReserveButtons,
-    undoStack: state.undoStack,
-    redoStack: state.redoStack,
-    recentEntrants: state.recentEntrants,
-    hiddenPlayerIds: state.hiddenPlayerIds,
+    version: STATE_VERSION,
+    activeWorkspaceId: state.activeWorkspaceId,
+    workspaces: state.workspaces,
   };
-}
-
-function isCourt(value: unknown): value is [string, string, string, string] {
-  return Array.isArray(value) && value.length === 4 && value.every((v) => typeof v === 'string');
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === 'object';
 }
 
 export function sanitizePersistedGameState(input: unknown): PersistedGameState {
   const fallback = createInitialState();
   if (!isRecord(input)) return fallback;
 
-  const players = isRecord(input.players) ? (input.players as Record<string, Player>) : fallback.players;
-  const court = isCourt(input.court) ? input.court : fallback.court;
-  const turns = Array.isArray(input.turns) ? (input.turns as Turn[]) : fallback.turns;
-  const turnNumber = typeof input.turnNumber === 'number' ? input.turnNumber : fallback.turnNumber;
-  const gameInProgress = typeof input.gameInProgress === 'boolean' ? input.gameInProgress : fallback.gameInProgress;
-  const gameStartedAt =
-    typeof input.gameStartedAt === 'number' || input.gameStartedAt === null
-      ? input.gameStartedAt
-      : fallback.gameStartedAt;
-  const gameHistory = Array.isArray(input.gameHistory)
-    ? (input.gameHistory as CompletedGame[]).map((game) => ({
-        ...game,
-        name:
-          typeof game.name === 'string'
-            ? game.name
-            : game.name === null
-              ? null
-              : null,
-      }))
-    : fallback.gameHistory;
-  const lastSnapshot = isRecord(input._lastSnapshot)
-    ? (input._lastSnapshot as unknown as GameSnapshot)
-    : null;
-  const isInitialized = typeof input.isInitialized === 'boolean' ? input.isInitialized : fallback.isInitialized;
-  const theme = input.theme === 'light' ? 'light' : 'dark';
-  const requireKiller =
-    typeof input.requireKiller === 'boolean' ? input.requireKiller : fallback.requireKiller;
-  const showReserveButtons =
-    typeof input.showReserveButtons === 'boolean'
-      ? input.showReserveButtons
-      : fallback.showReserveButtons;
-  const undoStack = Array.isArray(input.undoStack)
-    ? (input.undoStack as TurnStateSnapshot[])
-    : fallback.undoStack;
-  const redoStack = Array.isArray(input.redoStack)
-    ? (input.redoStack as TurnStateSnapshot[])
-    : fallback.redoStack;
-  const recentEntrants = Array.isArray(input.recentEntrants)
-    ? (input.recentEntrants as string[])
-    : fallback.recentEntrants;
-  const hiddenPlayerIds = Array.isArray(input.hiddenPlayerIds)
-    ? (input.hiddenPlayerIds as string[])
-    : fallback.hiddenPlayerIds;
+  if (isLegacySingleWorkspaceState(input)) {
+    return migrateLegacyStateToWorkspace(input);
+  }
+
+  const rawWorkspaces = isRecord(input.workspaces) ? input.workspaces : null;
+  if (!rawWorkspaces) return fallback;
+
+  const workspaces = Object.entries(rawWorkspaces).reduce<Record<string, WorkspaceState>>((acc, [id, value]) => {
+    const sanitized = sanitizeWorkspaceState(value, id, `Workspace ${Object.keys(acc).length + 1}`);
+    acc[id] = { ...sanitized, id };
+    return acc;
+  }, {});
+
+  const keys = Object.keys(workspaces);
+  if (keys.length === 0) return fallback;
+
+  const activeWorkspaceId =
+    typeof input.activeWorkspaceId === 'string' && workspaces[input.activeWorkspaceId]
+      ? input.activeWorkspaceId
+      : keys[0];
 
   return {
-    players,
-    court,
-    turns,
-    turnNumber,
-    gameInProgress,
-    gameStartedAt,
-    gameHistory,
-    _lastSnapshot: lastSnapshot,
-    isInitialized,
-    theme,
-    requireKiller,
-    showReserveButtons,
-    undoStack,
-    redoStack,
-    recentEntrants,
-    hiddenPlayerIds,
-  };
-}
-
-function createTurnStateSnapshot(state: PersistedGameState): TurnStateSnapshot {
-  return {
-    players: JSON.parse(JSON.stringify(state.players)),
-    court: [...state.court] as [string, string, string, string],
-    turns: JSON.parse(JSON.stringify(state.turns)),
-    turnNumber: state.turnNumber,
-    _lastSnapshot: state._lastSnapshot
-      ? {
-          players: JSON.parse(JSON.stringify(state._lastSnapshot.players)),
-          court: [...state._lastSnapshot.court] as [string, string, string, string],
-          turnNumber: state._lastSnapshot.turnNumber,
-        }
-      : null,
-    recentEntrants: [...state.recentEntrants],
+    version:
+      typeof input.version === 'number' && Number.isFinite(input.version)
+        ? input.version
+        : STATE_VERSION,
+    activeWorkspaceId,
+    workspaces,
   };
 }
 
@@ -196,15 +555,183 @@ export const useGameStore = create<GameStore>((set, get) => ({
     set(sanitizePersistedGameState(state));
   },
 
-  setTheme: (theme) => set({ theme }),
+  switchWorkspace: (workspaceId) => {
+    const state = get();
+    if (!state.workspaces[workspaceId]) return;
+    set({ activeWorkspaceId: workspaceId });
+  },
 
-  setRequireKiller: (requireKiller) => set({ requireKiller }),
+  createWorkspace: (name) => {
+    const state = get();
+    const workspaceName = normalizeWorkspaceName(name ?? `Workspace ${Object.keys(state.workspaces).length + 1}`);
+    const id = makeWorkspaceId(state.workspaces, workspaceName);
+    const nextWorkspace = createWorkspaceState(id, workspaceName);
 
-  setShowReserveButtons: (showReserveButtons) => set({ showReserveButtons }),
+    set({
+      activeWorkspaceId: id,
+      workspaces: {
+        ...state.workspaces,
+        [id]: nextWorkspace,
+      },
+    });
+
+    return id;
+  },
+
+  renameWorkspace: (workspaceId, name) => {
+    const state = get();
+    const trimmed = name.trim();
+    if (!trimmed || !state.workspaces[workspaceId]) return;
+
+    set(
+      updateWorkspace(state, workspaceId, (workspace) => ({
+        ...workspace,
+        name: trimmed,
+      }))
+    );
+  },
+
+  deleteWorkspace: (workspaceId) => {
+    const state = get();
+    if (!state.workspaces[workspaceId]) return;
+    if (Object.keys(state.workspaces).length <= 1) return;
+
+    const nextWorkspaces = { ...state.workspaces };
+    delete nextWorkspaces[workspaceId];
+    const nextIds = Object.keys(nextWorkspaces);
+
+    set({
+      workspaces: nextWorkspaces,
+      activeWorkspaceId:
+        state.activeWorkspaceId === workspaceId ? nextIds[0] : state.activeWorkspaceId,
+    });
+  },
+
+  setTheme: (theme) => {
+    const state = get();
+    set(
+      updateWorkspace(state, state.activeWorkspaceId, (workspace) => ({
+        ...workspace,
+        theme,
+      }))
+    );
+  },
+
+  setRequireKiller: (requireKiller) => {
+    const state = get();
+    set(
+      updateWorkspace(state, state.activeWorkspaceId, (workspace) => ({
+        ...workspace,
+        requireKiller,
+      }))
+    );
+  },
+
+  setShowReserveButtons: (showReserveButtons) => {
+    const state = get();
+    set(
+      updateWorkspace(state, state.activeWorkspaceId, (workspace) => ({
+        ...workspace,
+        showReserveButtons,
+      }))
+    );
+  },
+
+  setAnalyticsFilter: (next) => {
+    const state = get();
+    set(
+      updateWorkspace(state, state.activeWorkspaceId, (workspace) => ({
+        ...workspace,
+        analytics: {
+          ...workspace.analytics,
+          filter: sanitizeAnalyticsFilter(next),
+        },
+      }))
+    );
+  },
+
+  setSelectedPlayers: (next) => {
+    const state = get();
+    set(
+      updateWorkspace(state, state.activeWorkspaceId, (workspace) => ({
+        ...workspace,
+        analytics: {
+          ...workspace.analytics,
+          selectedPlayers: [...next],
+        },
+      }))
+    );
+  },
+
+  setH2hSort: (next) => {
+    const state = get();
+    set(
+      updateWorkspace(state, state.activeWorkspaceId, (workspace) => ({
+        ...workspace,
+        analytics: {
+          ...workspace.analytics,
+          h2hSort: next,
+        },
+      }))
+    );
+  },
+
+  setH2hPlayers: (next) => {
+    const state = get();
+    set(
+      updateWorkspace(state, state.activeWorkspaceId, (workspace) => ({
+        ...workspace,
+        analytics: {
+          ...workspace.analytics,
+          h2hPlayers: [...next],
+        },
+      }))
+    );
+  },
+
+  setTrendWindow: (next) => {
+    const state = get();
+    set(
+      updateWorkspace(state, state.activeWorkspaceId, (workspace) => ({
+        ...workspace,
+        analytics: {
+          ...workspace.analytics,
+          trendWindow: next,
+        },
+      }))
+    );
+  },
+
+  setTableRowsVisible: (next) => {
+    const state = get();
+    set(
+      updateWorkspace(state, state.activeWorkspaceId, (workspace) => ({
+        ...workspace,
+        analytics: {
+          ...workspace.analytics,
+          tableRowsVisible: Math.max(1, Math.floor(next)),
+        },
+      }))
+    );
+  },
+
+  setH2hRowsVisible: (next) => {
+    const state = get();
+    set(
+      updateWorkspace(state, state.activeWorkspaceId, (workspace) => ({
+        ...workspace,
+        analytics: {
+          ...workspace.analytics,
+          h2hRowsVisible: Math.max(1, Math.floor(next)),
+        },
+      }))
+    );
+  },
 
   initializeGame: (names) => {
     const state = get();
-    const players: Record<string, Player> = { ...state.players };
+    const workspace = selectActiveWorkspace(state);
+    const players: Record<string, Player> = { ...workspace.players };
     const court: [string, string, string, string] = ['', '', '', ''];
 
     for (let i = 0; i < 4; i++) {
@@ -224,60 +751,64 @@ export const useGameStore = create<GameStore>((set, get) => ({
       court[i] = id;
     }
 
-    set({
-      players,
-      court,
-      turns: [],
-      turnNumber: 0,
-      gameInProgress: true,
-      gameStartedAt: Date.now(),
-      isInitialized: true,
-      _lastSnapshot: null,
-      undoStack: [],
-      redoStack: [],
-      hiddenPlayerIds: state.hiddenPlayerIds.filter((id) => !court.includes(id)),
-    });
+    set(
+      updateWorkspace(state, state.activeWorkspaceId, (currentWorkspace) => ({
+        ...currentWorkspace,
+        players,
+        court,
+        turns: [],
+        turnNumber: 0,
+        gameInProgress: true,
+        gameStartedAt: Date.now(),
+        isInitialized: true,
+        _lastSnapshot: null,
+        undoStack: [],
+        redoStack: [],
+        hiddenPlayerIds: currentWorkspace.hiddenPlayerIds.filter((id) => !court.includes(id)),
+      }))
+    );
   },
 
   recordTurn: (eliminatedPos, killerPos, newPlayerName) => {
     const state = get();
-    if (!state.gameInProgress) return;
+    const workspace = selectActiveWorkspace(state);
+    if (!workspace.gameInProgress) return;
     if (eliminatedPos < 0 || eliminatedPos > 3 || killerPos < 0 || killerPos > 3) return;
 
     const trimmedReplacement = newPlayerName?.trim() ?? '';
     if (eliminatedPos !== 0) {
       if (!trimmedReplacement) return;
-      if (state.court.includes(trimmedReplacement.toLowerCase())) return;
+      if (workspace.court.includes(trimmedReplacement.toLowerCase())) return;
     }
 
     const snapshot: GameSnapshot = {
-      players: JSON.parse(JSON.stringify(state.players)),
-      court: [...state.court] as [string, string, string, string],
-      turnNumber: state.turnNumber,
+      players: JSON.parse(JSON.stringify(workspace.players)),
+      court: [...workspace.court] as [string, string, string, string],
+      turnNumber: workspace.turnNumber,
     };
-    const turnStateSnapshot = createTurnStateSnapshot(state);
+    const turnStateSnapshot = createTurnStateSnapshot(workspace);
 
     let result;
     try {
       result = processTurn(
-        state.court,
-        state.players,
+        workspace.court,
+        workspace.players,
         eliminatedPos,
         killerPos,
         trimmedReplacement || undefined,
-        state.requireKiller
+        workspace.requireKiller
       );
     } catch {
       return;
     }
 
     const turn: Turn = {
-      turnNumber: state.turnNumber,
+      turnNumber: workspace.turnNumber,
       timestamp: Date.now(),
-      courtBefore: [...state.court] as [string, string, string, string],
-      eliminatedPlayerId: state.court[eliminatedPos],
+      courtBefore: [...workspace.court] as [string, string, string, string],
+      eliminatedPlayerId: workspace.court[eliminatedPos],
       eliminatedPosition: eliminatedPos,
-      killerPlayerId: state.court[killerPos],
+      killerPlayerId: workspace.court[killerPos],
       killerPosition: killerPos,
       newPlayerId: result.newPlayer?.id ?? null,
       courtAfter: [...result.newCourt] as [string, string, string, string],
@@ -287,93 +818,107 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const updatedRecentEntrants = result.newPlayer
       ? [
           result.newPlayer.id,
-          ...state.recentEntrants.filter((id) => id !== result.newPlayer?.id),
+          ...workspace.recentEntrants.filter((id) => id !== result.newPlayer?.id),
         ].slice(0, MAX_RECENT_ENTRANTS)
-      : state.recentEntrants;
+      : workspace.recentEntrants;
 
     const activeIds = new Set(result.newCourt);
-    const hiddenPlayerIds = state.hiddenPlayerIds.filter(
+    const hiddenPlayerIds = workspace.hiddenPlayerIds.filter(
       (id) => !activeIds.has(id) && id !== result.newPlayer?.id
     );
 
-    set({
-      court: result.newCourt,
-      players: result.updatedPlayers,
-      turns: [...state.turns, turn],
-      turnNumber: state.turnNumber + 1,
-      _lastSnapshot: snapshot,
-      undoStack: [...state.undoStack, turnStateSnapshot].slice(-MAX_TURN_STACK),
-      redoStack: [],
-      recentEntrants: updatedRecentEntrants,
-      hiddenPlayerIds,
-    });
+    set(
+      updateWorkspace(state, state.activeWorkspaceId, (currentWorkspace) => ({
+        ...currentWorkspace,
+        court: result.newCourt,
+        players: result.updatedPlayers,
+        turns: [...workspace.turns, turn],
+        turnNumber: workspace.turnNumber + 1,
+        _lastSnapshot: snapshot,
+        undoStack: [...workspace.undoStack, turnStateSnapshot].slice(-MAX_TURN_STACK),
+        redoStack: [],
+        recentEntrants: updatedRecentEntrants,
+        hiddenPlayerIds,
+      }))
+    );
   },
 
   undoLastTurn: () => {
     const state = get();
-    if (state.undoStack.length === 0) return;
+    const workspace = selectActiveWorkspace(state);
+    if (workspace.undoStack.length === 0) return;
 
-    const previous = state.undoStack[state.undoStack.length - 1];
-    const currentSnapshot = createTurnStateSnapshot(state);
+    const previous = workspace.undoStack[workspace.undoStack.length - 1];
+    const currentSnapshot = createTurnStateSnapshot(workspace);
 
-    set({
-      players: previous.players,
-      court: previous.court,
-      turns: previous.turns,
-      turnNumber: previous.turnNumber,
-      _lastSnapshot: previous._lastSnapshot,
-      recentEntrants: previous.recentEntrants,
-      undoStack: state.undoStack.slice(0, -1),
-      redoStack: [...state.redoStack, currentSnapshot].slice(-MAX_TURN_STACK),
-    });
+    set(
+      updateWorkspace(state, state.activeWorkspaceId, (currentWorkspace) => ({
+        ...currentWorkspace,
+        players: previous.players,
+        court: previous.court,
+        turns: previous.turns,
+        turnNumber: previous.turnNumber,
+        _lastSnapshot: previous._lastSnapshot,
+        recentEntrants: previous.recentEntrants,
+        undoStack: workspace.undoStack.slice(0, -1),
+        redoStack: [...workspace.redoStack, currentSnapshot].slice(-MAX_TURN_STACK),
+      }))
+    );
   },
 
   redoLastTurn: () => {
     const state = get();
-    if (state.redoStack.length === 0) return;
+    const workspace = selectActiveWorkspace(state);
+    if (workspace.redoStack.length === 0) return;
 
-    const next = state.redoStack[state.redoStack.length - 1];
-    const currentSnapshot = createTurnStateSnapshot(state);
+    const next = workspace.redoStack[workspace.redoStack.length - 1];
+    const currentSnapshot = createTurnStateSnapshot(workspace);
 
-    set({
-      players: next.players,
-      court: next.court,
-      turns: next.turns,
-      turnNumber: next.turnNumber,
-      _lastSnapshot: next._lastSnapshot,
-      recentEntrants: next.recentEntrants,
-      redoStack: state.redoStack.slice(0, -1),
-      undoStack: [...state.undoStack, currentSnapshot].slice(-MAX_TURN_STACK),
-    });
+    set(
+      updateWorkspace(state, state.activeWorkspaceId, (currentWorkspace) => ({
+        ...currentWorkspace,
+        players: next.players,
+        court: next.court,
+        turns: next.turns,
+        turnNumber: next.turnNumber,
+        _lastSnapshot: next._lastSnapshot,
+        recentEntrants: next.recentEntrants,
+        redoStack: workspace.redoStack.slice(0, -1),
+        undoStack: [...workspace.undoStack, currentSnapshot].slice(-MAX_TURN_STACK),
+      }))
+    );
   },
 
   endGame: () => {
     const state = get();
-    if (!state.gameInProgress || state.turns.length === 0) return;
+    const workspace = selectActiveWorkspace(state);
+    if (!workspace.gameInProgress || workspace.turns.length === 0) return;
 
-    const nextGameId = state.gameHistory.reduce((maxId, game) => Math.max(maxId, game.id), 0) + 1;
+    const nextGameId = workspace.gameHistory.reduce((maxId, game) => Math.max(maxId, game.id), 0) + 1;
     const completedGame: CompletedGame = {
       id: nextGameId,
       name: null,
-      startedAt: state.gameStartedAt ?? state.turns[0].timestamp,
+      startedAt: workspace.gameStartedAt ?? workspace.turns[0].timestamp,
       endedAt: Date.now(),
-      turns: [...state.turns],
-      startingCourt: state.turns[0].courtBefore,
-      finalCourt: [...state.court] as [string, string, string, string],
+      turns: [...workspace.turns],
+      startingCourt: workspace.turns[0].courtBefore,
+      finalCourt: [...workspace.court] as [string, string, string, string],
     };
 
-    set({
-      gameHistory: [...state.gameHistory, completedGame],
-      court: ['', '', '', ''],
-      turns: [],
-      turnNumber: 0,
-      gameInProgress: false,
-      gameStartedAt: null,
-      _lastSnapshot: null,
-      undoStack: [],
-      redoStack: [],
-      // players and isInitialized stay — ELOs persist
-    });
+    set(
+      updateWorkspace(state, state.activeWorkspaceId, (currentWorkspace) => ({
+        ...currentWorkspace,
+        gameHistory: [...workspace.gameHistory, completedGame],
+        court: ['', '', '', ''],
+        turns: [],
+        turnNumber: 0,
+        gameInProgress: false,
+        gameStartedAt: null,
+        _lastSnapshot: null,
+        undoStack: [],
+        redoStack: [],
+      }))
+    );
   },
 
   resetAllData: () => {
@@ -382,40 +927,52 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
   deleteGameFromHistory: (gameId) => {
     const state = get();
-    set({
-      gameHistory: state.gameHistory.filter((game) => game.id !== gameId),
-    });
+    const workspace = selectActiveWorkspace(state);
+    set(
+      updateWorkspace(state, state.activeWorkspaceId, (currentWorkspace) => ({
+        ...currentWorkspace,
+        gameHistory: workspace.gameHistory.filter((game) => game.id !== gameId),
+      }))
+    );
   },
 
   renameGameInHistory: (gameId, name) => {
     const state = get();
+    const workspace = selectActiveWorkspace(state);
     const trimmed = name.trim();
-    set({
-      gameHistory: state.gameHistory.map((game) =>
-        game.id === gameId ? { ...game, name: trimmed.length > 0 ? trimmed : null } : game
-      ),
-    });
+    set(
+      updateWorkspace(state, state.activeWorkspaceId, (currentWorkspace) => ({
+        ...currentWorkspace,
+        gameHistory: workspace.gameHistory.map((game) =>
+          game.id === gameId ? { ...game, name: trimmed.length > 0 ? trimmed : null } : game
+        ),
+      }))
+    );
   },
 
   renamePlayer: (oldId, newName) => {
     const state = get();
+    const workspace = selectActiveWorkspace(state);
     const trimmedName = newName.trim();
-    if (!trimmedName || !state.players[oldId]) return;
+    if (!trimmedName || !workspace.players[oldId]) return;
 
     const newId = trimmedName.toLowerCase();
 
-    // Same ID — just update display name
     if (newId === oldId) {
-      const updatedPlayers = { ...state.players };
+      const updatedPlayers = { ...workspace.players };
       updatedPlayers[oldId] = { ...updatedPlayers[oldId], name: trimmedName };
-      set({ players: updatedPlayers });
+      set(
+        updateWorkspace(state, state.activeWorkspaceId, (currentWorkspace) => ({
+          ...currentWorkspace,
+          players: updatedPlayers,
+        }))
+      );
       return;
     }
 
-    // Different ID — reject if target already exists
-    if (state.players[newId]) return;
+    if (workspace.players[newId]) return;
 
-    const updatedPlayers = { ...state.players };
+    const updatedPlayers = { ...workspace.players };
     const player = { ...updatedPlayers[oldId], id: newId, name: trimmedName };
     delete updatedPlayers[oldId];
     updatedPlayers[newId] = player;
@@ -424,9 +981,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const mapCourt = (c: [string, string, string, string]) =>
       c.map(mapId) as [string, string, string, string];
 
-    const newCourt = state.gameInProgress ? mapCourt(state.court) : state.court;
+    const newCourt = workspace.gameInProgress ? mapCourt(workspace.court) : workspace.court;
 
-    const newTurns = state.turns.map((turn) => ({
+    const newTurns = workspace.turns.map((turn) => ({
       ...turn,
       eliminatedPlayerId: mapId(turn.eliminatedPlayerId),
       killerPlayerId: mapId(turn.killerPlayerId),
@@ -439,7 +996,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       })),
     }));
 
-    const newGameHistory = state.gameHistory.map((game) => ({
+    const newGameHistory = workspace.gameHistory.map((game) => ({
       ...game,
       startingCourt: mapCourt(game.startingCourt),
       finalCourt: mapCourt(game.finalCourt),
@@ -457,17 +1014,17 @@ export const useGameStore = create<GameStore>((set, get) => ({
       })),
     }));
 
-    const newSnapshot = state._lastSnapshot
+    const newSnapshot = workspace._lastSnapshot
       ? {
-          ...state._lastSnapshot,
+          ...workspace._lastSnapshot,
           players: Object.fromEntries(
-            Object.entries(state._lastSnapshot.players).map(([k, v]) =>
+            Object.entries(workspace._lastSnapshot.players).map(([k, v]) =>
               k === oldId
                 ? [newId, { ...v, id: newId, name: trimmedName }]
                 : [k, v]
             )
           ),
-          court: mapCourt(state._lastSnapshot.court),
+          court: mapCourt(workspace._lastSnapshot.court),
         }
       : null;
 
@@ -509,25 +1066,34 @@ export const useGameStore = create<GameStore>((set, get) => ({
       recentEntrants: snap.recentEntrants.map(mapId),
     });
 
-    set({
-      players: updatedPlayers,
-      court: newCourt,
-      turns: newTurns,
-      gameHistory: newGameHistory,
-      _lastSnapshot: newSnapshot,
-      undoStack: state.undoStack.map(mapTurnStateSnapshot),
-      redoStack: state.redoStack.map(mapTurnStateSnapshot),
-      recentEntrants: state.recentEntrants.map(mapId),
-      hiddenPlayerIds: state.hiddenPlayerIds.map(mapId),
-    });
+    set(
+      updateWorkspace(state, state.activeWorkspaceId, (currentWorkspace) => ({
+        ...currentWorkspace,
+        players: updatedPlayers,
+        court: newCourt,
+        turns: newTurns,
+        gameHistory: newGameHistory,
+        _lastSnapshot: newSnapshot,
+        undoStack: workspace.undoStack.map(mapTurnStateSnapshot),
+        redoStack: workspace.redoStack.map(mapTurnStateSnapshot),
+        recentEntrants: workspace.recentEntrants.map(mapId),
+        hiddenPlayerIds: workspace.hiddenPlayerIds.map(mapId),
+      }))
+    );
   },
 
   hidePlayer: (playerId) => {
     const state = get();
-    if (!state.players[playerId]) return;
-    if (state.court.includes(playerId)) return;
-    if (state.hiddenPlayerIds.includes(playerId)) return;
+    const workspace = selectActiveWorkspace(state);
+    if (!workspace.players[playerId]) return;
+    if (workspace.court.includes(playerId)) return;
+    if (workspace.hiddenPlayerIds.includes(playerId)) return;
 
-    set({ hiddenPlayerIds: [...state.hiddenPlayerIds, playerId] });
+    set(
+      updateWorkspace(state, state.activeWorkspaceId, (currentWorkspace) => ({
+        ...currentWorkspace,
+        hiddenPlayerIds: [...workspace.hiddenPlayerIds, playerId],
+      }))
+    );
   },
 }));
