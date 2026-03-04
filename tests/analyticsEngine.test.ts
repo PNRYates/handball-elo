@@ -234,6 +234,32 @@ test('self-kill turns do not count in position kill conversion', () => {
   assert.equal(metrics.eliminationByPosition[0].count, 1);
 });
 
+test('head-to-head kill counts ignore self-kill turns', () => {
+  const selfKillTurn: Turn = {
+    turnNumber: 0,
+    timestamp: Date.now(),
+    courtBefore: ['a', 'b', 'c', 'd'],
+    eliminatedPlayerId: 'c',
+    eliminatedPosition: 2,
+    killerPlayerId: 'c',
+    killerPosition: 2,
+    newPlayerId: 'e',
+    courtAfter: ['a', 'b', 'd', 'e'],
+    eloChanges: [
+      { playerId: 'c', previousElo: 1000, newElo: 984, delta: -16, reason: 'elimination_death' },
+      { playerId: 'a', previousElo: 1000, newElo: 1006, delta: 6, reason: 'survival' },
+      { playerId: 'b', previousElo: 1000, newElo: 1005, delta: 5, reason: 'survival' },
+      { playerId: 'd', previousElo: 1000, newElo: 1005, delta: 5, reason: 'survival' },
+    ],
+  };
+
+  const rows = buildHeadToHead([{ gameId: 1, gameLabel: 'Game #1', turn: selfKillTurn }], players, 1);
+  const ac = rows.find((r) => r.pairKey === 'a::c');
+  assert.ok(ac);
+  assert.equal(ac?.killsAonB, 0);
+  assert.equal(ac?.killsBonA, 0);
+});
+
 test('buildPlayerSummary includes players appearing only in courtAfter', () => {
   const turn: Turn = {
     turnNumber: 0,

@@ -50,7 +50,7 @@ export default function CourtPage() {
     court.includes(newPlayerName.trim().toLowerCase());
   const fallbackKillerPos = (eliminatedPos === 0 ? 1 : 0) as CourtPosition;
   const effectiveKillerPos = requireKiller ? killerPos : (eliminatedPos !== null ? fallbackKillerPos : null);
-  const isAllowedSelfKill = requireKiller && effectiveKillerPos === 0 && eliminatedPos === 0;
+  const isAllowedSelfKill = requireKiller && effectiveKillerPos !== null && eliminatedPos !== null && effectiveKillerPos === eliminatedPos;
   const canSubmit =
     effectiveKillerPos !== null &&
     eliminatedPos !== null &&
@@ -99,7 +99,7 @@ export default function CourtPage() {
     (nameOverride?: string) => {
       const name = nameOverride ?? newPlayerName.trim();
       if (effectiveKillerPos === null || eliminatedPos === null) return;
-      const allowSelfKill = requireKiller && effectiveKillerPos === 0 && eliminatedPos === 0;
+      const allowSelfKill = requireKiller && effectiveKillerPos === eliminatedPos;
       if (effectiveKillerPos === eliminatedPos && !allowSelfKill) return;
       if (needsNewPlayer && !name) return;
       if (needsNewPlayer && court.includes(name.toLowerCase())) return;
@@ -126,7 +126,7 @@ export default function CourtPage() {
       if (killerPos === null) {
         setKillerPos(pos);
       } else if (eliminatedPos === null) {
-        const allowSelfKill = killerPos === 0 && pos === 0;
+        const allowSelfKill = killerPos === pos;
         if (pos === killerPos && !allowSelfKill) return;
         setEliminatedPos(pos);
         if (pos !== 0) {

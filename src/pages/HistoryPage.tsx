@@ -9,6 +9,7 @@ function TurnItem({ turn, players }: { turn: Turn; players: Record<string, { nam
     ? players[turn.newPlayerId]?.name ?? turn.newPlayerId
     : null;
   const isSecondChance = turn.eliminatedPosition === 0;
+  const isSelfKill = turn.killerPlayerId === turn.eliminatedPlayerId;
 
   return (
     <div className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2.5">
@@ -18,9 +19,18 @@ function TurnItem({ turn, players }: { turn: Turn; players: Record<string, { nam
         </span>
       </div>
       <p className="text-sm">
-        <span className="text-green-400">{killer}</span>
-        <span className="text-gray-500"> eliminated </span>
-        <span className="text-red-400">{eliminated}</span>
+        {isSelfKill ? (
+          <>
+            <span className="text-red-400">{eliminated}</span>
+            <span className="text-gray-500"> self-eliminated </span>
+          </>
+        ) : (
+          <>
+            <span className="text-green-400">{killer}</span>
+            <span className="text-gray-500"> eliminated </span>
+            <span className="text-red-400">{eliminated}</span>
+          </>
+        )}
         <span className="text-gray-600"> (#{turn.eliminatedPosition + 1})</span>
       </p>
       {isSecondChance && (

@@ -217,11 +217,13 @@ export function buildHeadToHead(
         const deltaB = getPlayerDelta(turn, existing.playerBId);
         existing.netEloAminusB += deltaA - deltaB;
 
-        if (turn.killerPlayerId === existing.playerAId && turn.eliminatedPlayerId === existing.playerBId) {
-          existing.killsAonB += 1;
-        }
-        if (turn.killerPlayerId === existing.playerBId && turn.eliminatedPlayerId === existing.playerAId) {
-          existing.killsBonA += 1;
+        if (isDirectKillTurn(turn)) {
+          if (turn.killerPlayerId === existing.playerAId && turn.eliminatedPlayerId === existing.playerBId) {
+            existing.killsAonB += 1;
+          }
+          if (turn.killerPlayerId === existing.playerBId && turn.eliminatedPlayerId === existing.playerAId) {
+            existing.killsBonA += 1;
+          }
         }
 
         map.set(key, existing);
