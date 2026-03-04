@@ -12,6 +12,9 @@ export interface TurnResult {
   eloChanges: EloChange[];
 }
 
+const toMilliElo = (value: number): number => Math.round(value * 1000);
+const fromMilliElo = (value: number): number => value / 1000;
+
 export function processTurn(
   court: [string, string, string, string],
   players: Record<string, Player>,
@@ -133,18 +136,20 @@ export function processTurn(
       reason: 'elimination_death',
     });
 
-    const baseShare = Math.round((survivorPool / survivorIds.length) * 1000) / 1000;
-    let distributed = 0;
+    const survivorPoolMilli = toMilliElo(survivorPool);
+    const baseShareMilli = Math.floor(survivorPoolMilli / survivorIds.length);
+    let distributedMilli = 0;
 
     survivorIds.forEach((id, idx) => {
       const isLast = idx === survivorIds.length - 1;
-      const share = isLast
-        ? Math.round((survivorPool - distributed) * 1000) / 1000
-        : baseShare;
-      distributed += share;
+      const shareMilli = isLast
+        ? survivorPoolMilli - distributedMilli
+        : baseShareMilli;
+      distributedMilli += shareMilli;
+      const share = fromMilliElo(shareMilli);
       if (share === 0) return;
       const prev = updatedPlayers[id].elo;
-      updatedPlayers[id].elo += share;
+      updatedPlayers[id].elo = fromMilliElo(toMilliElo(updatedPlayers[id].elo) + shareMilli);
       eloChanges.push({
         playerId: id,
         previousElo: prev,
@@ -200,23 +205,33 @@ export function processTurn(
   }
 
   // Keep each turn strictly zero-sum to prevent long-run rating inflation/deflation.
-  const netDelta = eloChanges.reduce((sum, change) => sum + change.delta, 0);
-  if (netDelta !== 0) {
+  const netDeltaMilli = eloChanges.reduce(
+    (sum, change) => sum + toMilliElo(change.delta),
+    0
+  );
+  if (netDeltaMilli !== 0) {
     const correctedEliminated = updatedPlayers[eliminatedId];
-    correctedEliminated.elo -= netDelta;
+    correctedEliminated.elo = fromMilliElo(
+      toMilliElo(correctedEliminated.elo) - netDeltaMilli
+    );
 
     const eliminatedChange = eloChanges.find(
       (change) => change.playerId === eliminatedId && change.reason === 'elimination_death'
     );
     if (eliminatedChange) {
-      eliminatedChange.delta -= netDelta;
+      eliminatedChange.delta = fromMilliElo(
+        toMilliElo(eliminatedChange.delta) - netDeltaMilli
+      );
       eliminatedChange.newElo = correctedEliminated.elo;
     } else {
+      const previousElo = fromMilliElo(
+        toMilliElo(correctedEliminated.elo) + netDeltaMilli
+      );
       eloChanges.push({
         playerId: eliminatedId,
-        previousElo: correctedEliminated.elo + netDelta,
+        previousElo,
         newElo: correctedEliminated.elo,
-        delta: -netDelta,
+        delta: fromMilliElo(-netDeltaMilli),
         reason: 'elimination_death',
       });
     }
