@@ -86,6 +86,23 @@ test('killer mode allows #1 self-kill from store path', () => {
   assert.deepEqual(useGameStore.getState().court, ['bob', 'cara', 'dan', 'alice']);
 });
 
+test('killer mode allows non-#1 self-kill from store path', () => {
+  resetStore();
+  const store = useGameStore.getState();
+
+  store.setRequireKiller(true);
+  store.initializeGame(['Alice', 'Bob', 'Cara', 'Dan']);
+  useGameStore.getState().recordTurn(2, 2, 'Eve');
+
+  const turn = useGameStore.getState().turns[0];
+  assert.equal(Boolean(turn), true);
+  assert.equal(turn.killerPosition, 2);
+  assert.equal(turn.eliminatedPosition, 2);
+  const hasKillerChange = turn.eloChanges.some((c) => c.reason === 'elimination_kill');
+  assert.equal(hasKillerChange, false);
+  assert.deepEqual(useGameStore.getState().court, ['alice', 'bob', 'dan', 'eve']);
+});
+
 test('recent entrants tracks most recent replacements', () => {
   resetStore();
   const store = useGameStore.getState();
