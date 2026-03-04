@@ -14,20 +14,45 @@ function createPlayers(): Record<string, Player> {
   };
 }
 
-test('killer mode: killer gets 3x survivor total and turn remains zero-sum', () => {
+test('killer mode: killer delta is ELO-based and turn remains zero-sum', () => {
   const players = createPlayers();
   const result = processTurn(['a', 'b', 'c', 'd'], players, 3, 0, 'Eve', true);
 
-  const survivorTotal = result.eloChanges
-    .filter((c) => c.reason === 'survival')
-    .reduce((sum, c) => sum + c.delta, 0);
   const killerDelta = result.eloChanges.find((c) => c.reason === 'elimination_kill')?.delta ?? 0;
   const net = result.eloChanges.reduce((sum, c) => sum + c.delta, 0);
 
-  assert.equal(killerDelta, survivorTotal * 3);
+  // With equal ratings (all 1000), expected score = 0.5, so killerDelta = K * (1 - 0.5) = 16
+  assert.equal(killerDelta, 16);
   assert.equal(net, 0);
   assert.deepEqual(result.newCourt, ['a', 'b', 'c', 'eve']);
   assert.equal(result.newPlayer?.id, 'eve');
+});
+
+test('killer mode: higher-rated killer gains less ELO than lower-rated killer', () => {
+  const now = Date.now();
+  const highKillerPlayers: Record<string, Player> = {
+    a: { id: 'a', name: 'Alice', elo: 1400, gamesPlayed: 0, eliminations: 0, timesEliminated: 0, createdAt: now },
+    b: { id: 'b', name: 'Bob', elo: 1000, gamesPlayed: 0, eliminations: 0, timesEliminated: 0, createdAt: now },
+    c: { id: 'c', name: 'Cara', elo: 1000, gamesPlayed: 0, eliminations: 0, timesEliminated: 0, createdAt: now },
+    d: { id: 'd', name: 'Dan', elo: 1000, gamesPlayed: 0, eliminations: 0, timesEliminated: 0, createdAt: now },
+    e: { id: 'e', name: 'Eve', elo: 1000, gamesPlayed: 0, eliminations: 0, timesEliminated: 0, createdAt: now },
+  };
+  const lowKillerPlayers: Record<string, Player> = {
+    a: { id: 'a', name: 'Alice', elo: 600, gamesPlayed: 0, eliminations: 0, timesEliminated: 0, createdAt: now },
+    b: { id: 'b', name: 'Bob', elo: 1000, gamesPlayed: 0, eliminations: 0, timesEliminated: 0, createdAt: now },
+    c: { id: 'c', name: 'Cara', elo: 1000, gamesPlayed: 0, eliminations: 0, timesEliminated: 0, createdAt: now },
+    d: { id: 'd', name: 'Dan', elo: 1000, gamesPlayed: 0, eliminations: 0, timesEliminated: 0, createdAt: now },
+    e: { id: 'e', name: 'Eve', elo: 1000, gamesPlayed: 0, eliminations: 0, timesEliminated: 0, createdAt: now },
+  };
+
+  const highRatedKillerResult = processTurn(['a', 'b', 'c', 'd'], highKillerPlayers, 3, 0, 'Eve', true);
+  const lowRatedKillerResult = processTurn(['a', 'b', 'c', 'd'], lowKillerPlayers, 3, 0, 'Eve', true);
+
+  const highRatedKillerDelta = highRatedKillerResult.eloChanges.find((c) => c.reason === 'elimination_kill')?.delta ?? 0;
+  const lowRatedKillerDelta = lowRatedKillerResult.eloChanges.find((c) => c.reason === 'elimination_kill')?.delta ?? 0;
+
+  // A lower-rated killer should gain more ELO for the same elimination than a higher-rated killer
+  assert.ok(lowRatedKillerDelta > highRatedKillerDelta, `lowRatedKillerDelta (${lowRatedKillerDelta}) should be > highRatedKillerDelta (${highRatedKillerDelta})`);
 });
 
 test('position #1 elimination gets second chance and rotates to #4', () => {
