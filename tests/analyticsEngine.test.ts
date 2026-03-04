@@ -178,6 +178,62 @@ test('buildPositionStrategy does not attribute kill conversion in no-killer turn
   assert.equal(metrics.killsByPosition.reduce((s, r) => s + r.count, 0), 0);
 });
 
+test('self-kill turns do not count as kills in form metrics but still count deaths', () => {
+  const selfKillTurn: Turn = {
+    turnNumber: 0,
+    timestamp: Date.now(),
+    courtBefore: ['a', 'b', 'c', 'd'],
+    eliminatedPlayerId: 'a',
+    eliminatedPosition: 0,
+    killerPlayerId: 'a',
+    killerPosition: 0,
+    newPlayerId: null,
+    courtAfter: ['b', 'c', 'd', 'a'],
+    eloChanges: [
+      { playerId: 'a', previousElo: 1000, newElo: 995, delta: -5, reason: 'elimination_kill' },
+      { playerId: 'a', previousElo: 995, newElo: 985, delta: -10, reason: 'elimination_death' },
+      { playerId: 'b', previousElo: 1000, newElo: 1005, delta: 5, reason: 'survival' },
+      { playerId: 'c', previousElo: 1000, newElo: 1005, delta: 5, reason: 'survival' },
+      { playerId: 'd', previousElo: 1000, newElo: 1005, delta: 5, reason: 'survival' },
+    ],
+  };
+
+  const result = buildPerformanceTrends(
+    [{ gameId: 1, gameLabel: 'Game #1', turn: selfKillTurn }],
+    players,
+    ['a']
+  );
+  const metrics = result.formMetrics[0];
+
+  assert.equal(metrics.killRate10, 0);
+  assert.equal(metrics.deathRate10, 1);
+});
+
+test('self-kill turns do not count in position kill conversion', () => {
+  const selfKillTurn: Turn = {
+    turnNumber: 0,
+    timestamp: Date.now(),
+    courtBefore: ['a', 'b', 'c', 'd'],
+    eliminatedPlayerId: 'a',
+    eliminatedPosition: 0,
+    killerPlayerId: 'a',
+    killerPosition: 0,
+    newPlayerId: null,
+    courtAfter: ['b', 'c', 'd', 'a'],
+    eloChanges: [
+      { playerId: 'a', previousElo: 1000, newElo: 995, delta: -5, reason: 'elimination_kill' },
+      { playerId: 'a', previousElo: 995, newElo: 985, delta: -10, reason: 'elimination_death' },
+      { playerId: 'b', previousElo: 1000, newElo: 1005, delta: 5, reason: 'survival' },
+      { playerId: 'c', previousElo: 1000, newElo: 1005, delta: 5, reason: 'survival' },
+      { playerId: 'd', previousElo: 1000, newElo: 1005, delta: 5, reason: 'survival' },
+    ],
+  };
+
+  const metrics = buildPositionStrategy([{ gameId: 1, gameLabel: 'Game #1', turn: selfKillTurn }]);
+  assert.equal(metrics.killsByPosition.reduce((sum, row) => sum + row.count, 0), 0);
+  assert.equal(metrics.eliminationByPosition[0].count, 1);
+});
+
 test('buildPlayerSummary includes players appearing only in courtAfter', () => {
   const turn: Turn = {
     turnNumber: 0,
