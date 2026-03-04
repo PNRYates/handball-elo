@@ -774,8 +774,6 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const workspace = selectActiveWorkspace(state);
     if (!workspace.gameInProgress) return;
     if (eliminatedPos < 0 || eliminatedPos > 3 || killerPos < 0 || killerPos > 3) return;
-    const isAllowedSelfKill = workspace.requireKiller && eliminatedPos === killerPos;
-    if (workspace.requireKiller && eliminatedPos === killerPos && !isAllowedSelfKill) return;
 
     const trimmedReplacement = newPlayerName?.trim() ?? '';
     if (eliminatedPos !== 0) {

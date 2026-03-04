@@ -65,16 +65,18 @@ export default function TurnRecorder({
     <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-3 space-y-3">
       {/* Summary */}
       <p className="text-sm">
-        {isSelfKill ? (
-          <>
-            <span className="text-red-400 font-medium">{eliminated.name}</span>
-            <span className="text-gray-500"> self-eliminated </span>
-          </>
-        ) : requireKiller && killer ? (
-          <>
-            <span className="text-green-400 font-medium">{killer.name}</span>
-            <span className="text-gray-500"> eliminated </span>
-          </>
+        {requireKiller && killer ? (
+          isSelfKill ? (
+            <>
+              <span className="text-amber-400 font-medium">{killer.name}</span>
+              <span className="text-gray-500"> self-eliminated </span>
+            </>
+          ) : (
+            <>
+              <span className="text-green-400 font-medium">{killer.name}</span>
+              <span className="text-gray-500"> eliminated </span>
+            </>
+          )
         ) : (
           <span className="text-gray-500">Eliminated: </span>
         )}

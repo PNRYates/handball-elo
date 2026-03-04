@@ -20,18 +20,9 @@ function TurnItem({ turn, players }: { turn: Turn; players: Record<string, { nam
         </span>
       </div>
       <p className="text-sm">
-        {isSelfKill ? (
-          <>
-            <span className="text-red-400">{eliminated}</span>
-            <span className="text-gray-500"> self-eliminated </span>
-          </>
-        ) : (
-          <>
-            <span className="text-green-400">{killer}</span>
-            <span className="text-gray-500"> eliminated </span>
-            <span className="text-red-400">{eliminated}</span>
-          </>
-        )}
+        <span className={isSelfKill ? 'text-amber-400' : 'text-green-400'}>{killer}</span>
+        <span className="text-gray-500"> {isSelfKill ? 'self-eliminated' : 'eliminated'} </span>
+        <span className="text-red-400">{eliminated}</span>
         <span className="text-gray-600"> (#{turn.eliminatedPosition + 1})</span>
       </p>
       {isSecondChance && (

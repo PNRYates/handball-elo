@@ -1,7 +1,7 @@
 import type { Player } from '../../types';
 import { formatRating } from '../../lib/rating';
 
-type SelectionState = 'none' | 'killer' | 'eliminated';
+type SelectionState = 'none' | 'killer' | 'eliminated' | 'self';
 
 const positionColors: Record<number, string> = {
   1: 'border-gray-600 bg-gray-800',
@@ -21,6 +21,7 @@ const selectionStyles: Record<SelectionState, string> = {
   none: '',
   killer: 'border-green-400 bg-green-500/15 ring-1 ring-green-500/50',
   eliminated: 'border-red-400 bg-red-500/15 ring-1 ring-red-500/50',
+  self: 'border-amber-400 bg-amber-500/15 ring-1 ring-amber-500/50',
 };
 
 interface Props {
@@ -61,10 +62,14 @@ export default function PositionCard({
       {selectionState !== 'none' && (
         <span
           className={`text-[10px] font-bold uppercase tracking-wider shrink-0 ${
-            selectionState === 'killer' ? 'text-green-400' : 'text-red-400'
+            selectionState === 'killer'
+              ? 'text-green-400'
+              : selectionState === 'self'
+                ? 'text-amber-400'
+                : 'text-red-400'
           }`}
         >
-          {selectionState === 'killer' ? 'KILL' : 'OUT'}
+          {selectionState === 'killer' ? 'KILL' : selectionState === 'self' ? 'SELF' : 'OUT'}
         </span>
       )}
       <div className="text-right shrink-0">

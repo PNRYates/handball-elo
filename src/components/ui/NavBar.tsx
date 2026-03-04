@@ -1,4 +1,6 @@
 import { NavLink } from 'react-router-dom';
+import WorkspaceSwitcher from './WorkspaceSwitcher';
+import type { Workspace } from '../../types';
 
 const links = [
   { to: '/', label: 'Court' },
@@ -14,15 +16,57 @@ interface NavBarProps {
   syncLabel: string;
   onLogout: () => void;
   logoutLabel?: string;
+  activeWorkspaceId?: string;
+  workspaces?: Workspace[];
+  onSwitchWorkspace?: (id: string) => void;
+  onCreateWorkspace?: (name: string) => void;
+  onRenameWorkspace?: (id: string, name: string) => void;
+  onDeleteWorkspace?: (id: string) => void;
 }
 
-export default function NavBar({ userEmail, syncLabel, onLogout, logoutLabel = 'Sign out' }: NavBarProps) {
+export default function NavBar({
+  userEmail,
+  syncLabel,
+  onLogout,
+  logoutLabel = 'Sign out',
+  activeWorkspaceId,
+  workspaces,
+  onSwitchWorkspace,
+  onCreateWorkspace,
+  onRenameWorkspace,
+  onDeleteWorkspace,
+}: NavBarProps) {
+  const showWorkspaceSwitcher =
+    workspaces &&
+    workspaces.length > 0 &&
+    activeWorkspaceId !== undefined &&
+    onSwitchWorkspace &&
+    onCreateWorkspace &&
+    onRenameWorkspace &&
+    onDeleteWorkspace;
+
   return (
     <nav className="bg-gray-900 border-b border-gray-800">
       <div className="max-w-xl mx-auto px-4 py-2 flex items-center justify-between gap-3">
         <div className="min-w-0">
           <p className="text-xs text-gray-400 truncate">{userEmail}</p>
-          <p className="text-[11px] text-gray-500">{syncLabel}</p>
+          <div className="flex items-center gap-2">
+            {showWorkspaceSwitcher ? (
+              <WorkspaceSwitcher
+                activeWorkspaceId={activeWorkspaceId}
+                workspaces={workspaces}
+                onSwitch={onSwitchWorkspace}
+                onCreate={onCreateWorkspace}
+                onRename={onRenameWorkspace}
+                onDelete={onDeleteWorkspace}
+              />
+            ) : (
+              <p className="text-[11px] text-gray-500">{syncLabel}</p>
+            )}
+            {showWorkspaceSwitcher && (
+              <p className="text-[11px] text-gray-500">{syncLabel}</p>
+            )}
+          </div>
         </div>
         <button
           type="button"
@@ -52,3 +96,4 @@ export default function NavBar({ userEmail, syncLabel, onLogout, logoutLabel = '
     </nav>
   );
 }
+

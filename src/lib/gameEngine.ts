@@ -35,6 +35,8 @@ function splitPool(survivorPool: number, survivorCount: number): number[] {
   shares[shares.length - 1] = roundToInternal(shares[shares.length - 1] + (pool - allocated));
   return shares;
 }
+const toMilliElo = (value: number): number => Math.round(value * 1000);
+const fromMilliElo = (value: number): number => value / 1000;
 
 export function processTurn(
   court: [string, string, string, string],
@@ -191,23 +193,33 @@ export function processTurn(
   }
 
   // Keep each turn strictly zero-sum to prevent long-run rating inflation/deflation.
-  const netDelta = eloChanges.reduce((sum, change) => roundToInternal(sum + change.delta), 0);
-  if (netDelta !== 0) {
+  const netDeltaMilli = eloChanges.reduce(
+    (sum, change) => sum + toMilliElo(change.delta),
+    0
+  );
+  if (netDeltaMilli !== 0) {
     const correctedEliminated = updatedPlayers[eliminatedId];
-    correctedEliminated.elo = roundToInternal(correctedEliminated.elo - netDelta);
+    correctedEliminated.elo = fromMilliElo(
+      toMilliElo(correctedEliminated.elo) - netDeltaMilli
+    );
 
     const eliminatedChange = eloChanges.find(
       (change) => change.playerId === eliminatedId && change.reason === 'elimination_death'
     );
     if (eliminatedChange) {
-      eliminatedChange.delta = roundToInternal(eliminatedChange.delta - netDelta);
+      eliminatedChange.delta = fromMilliElo(
+        toMilliElo(eliminatedChange.delta) - netDeltaMilli
+      );
       eliminatedChange.newElo = correctedEliminated.elo;
     } else {
+      const previousElo = fromMilliElo(
+        toMilliElo(correctedEliminated.elo) + netDeltaMilli
+      );
       eloChanges.push({
         playerId: eliminatedId,
-        previousElo: roundToInternal(correctedEliminated.elo + netDelta),
+        previousElo,
         newElo: correctedEliminated.elo,
-        delta: roundToInternal(-netDelta),
+        delta: fromMilliElo(-netDeltaMilli),
         reason: 'elimination_death',
       });
     }

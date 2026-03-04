@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { useGameStore } from '../store/gameStore';
+import { useGameStore, selectActiveWorkspace } from '../store/gameStore';
 import type { CourtPosition } from '../types';
 import type { SelectionPhase } from '../components/court/CourtDisplay';
 import InitialSetup from '../components/setup/InitialSetup';
@@ -8,19 +8,19 @@ import TurnRecorder from '../components/turn/TurnRecorder';
 import MobileSpeedPanel from '../components/court/MobileSpeedPanel';
 
 export default function CourtPage() {
-  const requireKiller = useGameStore((s) => s.requireKiller);
-  const showReserveButtons = useGameStore((s) => s.showReserveButtons);
-  const gameInProgress = useGameStore((s) => s.gameInProgress);
-  const court = useGameStore((s) => s.court);
-  const players = useGameStore((s) => s.players);
-  const turns = useGameStore((s) => s.turns);
+  const requireKiller = useGameStore((s) => selectActiveWorkspace(s).requireKiller);
+  const showReserveButtons = useGameStore((s) => selectActiveWorkspace(s).showReserveButtons);
+  const gameInProgress = useGameStore((s) => selectActiveWorkspace(s).gameInProgress);
+  const court = useGameStore((s) => selectActiveWorkspace(s).court);
+  const players = useGameStore((s) => selectActiveWorkspace(s).players);
+  const turns = useGameStore((s) => selectActiveWorkspace(s).turns);
   const recordTurn = useGameStore((s) => s.recordTurn);
   const undoLastTurn = useGameStore((s) => s.undoLastTurn);
   const redoLastTurn = useGameStore((s) => s.redoLastTurn);
   const endGame = useGameStore((s) => s.endGame);
-  const undoStack = useGameStore((s) => s.undoStack);
-  const redoStack = useGameStore((s) => s.redoStack);
-  const recentEntrants = useGameStore((s) => s.recentEntrants);
+  const undoStack = useGameStore((s) => selectActiveWorkspace(s).undoStack);
+  const redoStack = useGameStore((s) => selectActiveWorkspace(s).redoStack);
+  const recentEntrants = useGameStore((s) => selectActiveWorkspace(s).recentEntrants);
 
   const [killerPos, setKillerPos] = useState<CourtPosition | null>(null);
   const [eliminatedPos, setEliminatedPos] = useState<CourtPosition | null>(null);
@@ -50,11 +50,9 @@ export default function CourtPage() {
     court.includes(newPlayerName.trim().toLowerCase());
   const fallbackKillerPos = (eliminatedPos === 0 ? 1 : 0) as CourtPosition;
   const effectiveKillerPos = requireKiller ? killerPos : (eliminatedPos !== null ? fallbackKillerPos : null);
-  const isAllowedSelfKill = requireKiller && effectiveKillerPos !== null && eliminatedPos !== null && effectiveKillerPos === eliminatedPos;
   const canSubmit =
     effectiveKillerPos !== null &&
     eliminatedPos !== null &&
-    (effectiveKillerPos !== eliminatedPos || isAllowedSelfKill) &&
     (!needsNewPlayer || (newPlayerName.trim().length > 0 && !newPlayerOnCourt));
 
   const reserves = Object.values(players)
@@ -89,7 +87,7 @@ export default function CourtPage() {
 
   useEffect(() => {
     return useGameStore.subscribe((nextState, prevState) => {
-      if (nextState.turnNumber !== prevState.turnNumber) {
+      if (selectActiveWorkspace(nextState).turnNumber !== selectActiveWorkspace(prevState).turnNumber) {
         resetSelection();
       }
     });
@@ -99,8 +97,6 @@ export default function CourtPage() {
     (nameOverride?: string) => {
       const name = nameOverride ?? newPlayerName.trim();
       if (effectiveKillerPos === null || eliminatedPos === null) return;
-      const allowSelfKill = requireKiller && effectiveKillerPos === eliminatedPos;
-      if (effectiveKillerPos === eliminatedPos && !allowSelfKill) return;
       if (needsNewPlayer && !name) return;
       if (needsNewPlayer && court.includes(name.toLowerCase())) return;
       recordTurn(
@@ -109,7 +105,7 @@ export default function CourtPage() {
         needsNewPlayer ? name : undefined
       );
     },
-    [effectiveKillerPos, eliminatedPos, needsNewPlayer, newPlayerName, court, recordTurn, requireKiller]
+    [effectiveKillerPos, eliminatedPos, needsNewPlayer, newPlayerName, court, recordTurn]
   );
 
   const handlePositionPress = useCallback(
@@ -126,8 +122,6 @@ export default function CourtPage() {
       if (killerPos === null) {
         setKillerPos(pos);
       } else if (eliminatedPos === null) {
-        const allowSelfKill = killerPos === pos;
-        if (pos === killerPos && !allowSelfKill) return;
         setEliminatedPos(pos);
         if (pos !== 0) {
           setTimeout(() => inputRef.current?.focus(), 0);
