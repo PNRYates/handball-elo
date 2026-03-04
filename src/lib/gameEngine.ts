@@ -1,8 +1,7 @@
 import type { CourtPosition, Player, EloChange } from '../types';
 import {
-  calculateEliminationElo,
   calculateEliminationVsAverageElo,
-  calculateSurvivalBonus,
+  calculateKillerModeDistribution,
 } from './elo.ts';
 import { roundToInternal } from './rating.ts';
 
@@ -62,10 +61,17 @@ export function processTurn(
 
   const eloChanges: EloChange[] = [];
   if (requireKiller && !isSelfKill) {
-    // 1. Elimination ELO (killer-based mode)
-    const { killerDelta, eliminatedDelta } = calculateEliminationElo(
+    // Identify the two bystanders (not killer, not eliminated).
+    const bystanderIds: string[] = [];
+    for (let i = 0; i < 4; i++) {
+      if (i !== eliminatedPos && i !== killerPos) bystanderIds.push(court[i]);
+    }
+
+    // Pool-based distribution: eliminated player's loss funds all gains.
+    const { eliminatedDelta, killerDelta, bystanderDeltas } = calculateKillerModeDistribution(
+      updatedPlayers[eliminatedId].elo,
       updatedPlayers[killerId].elo,
-      updatedPlayers[eliminatedId].elo
+      bystanderIds.map((id) => updatedPlayers[id].elo)
     );
 
     const killerApplied = applyPlayerDelta(updatedPlayers, killerId, killerDelta);
@@ -88,49 +94,18 @@ export function processTurn(
       reason: 'elimination_death',
     });
 
-    // 2. Survival bonuses for bystanders (not killer, not eliminated)
-    const avgRating =
-      roundToInternal(court.map((id) => players[id].elo).reduce((a, b) => a + b, 0) / 4);
-
-    for (let i = 0; i < 4; i++) {
-      const pid = court[i];
-      if (pid === eliminatedId || pid === killerId) continue;
-
-      const isPos1 = i === 0;
-      const bonus = calculateSurvivalBonus(
-        updatedPlayers[pid].elo,
-        avgRating,
-        isPos1
-      );
-      if (bonus !== 0) {
-        const applied = applyPlayerDelta(updatedPlayers, pid, bonus);
-        eloChanges.push({
-          playerId: pid,
-          previousElo: applied.previousElo,
-          newElo: applied.newElo,
-          delta: applied.appliedDelta,
-          reason: 'survival',
-        });
-      }
-    }
-
-    // Tune scoring so killer gain is 3x the total passive survivor gain each turn.
-    const survivorTotal = eloChanges
-      .filter((change) => change.reason === 'survival')
-      .reduce((sum, change) => roundToInternal(sum + change.delta), 0);
-    const targetKillerDelta = roundToInternal(survivorTotal * 3);
-
-    const killerChange = eloChanges.find(
-      (change) => change.playerId === killerId && change.reason === 'elimination_kill'
-    );
-    if (killerChange) {
-      const killerAdjustment = roundToInternal(targetKillerDelta - killerChange.delta);
-      if (killerAdjustment !== 0) {
-        const applied = applyPlayerDelta(updatedPlayers, killerId, killerAdjustment);
-        killerChange.delta = roundToInternal(killerChange.delta + applied.appliedDelta);
-        killerChange.newElo = applied.newElo;
-      }
-    }
+    bystanderIds.forEach((id, idx) => {
+      const delta = bystanderDeltas[idx];
+      if (delta === 0) return;
+      const applied = applyPlayerDelta(updatedPlayers, id, delta);
+      eloChanges.push({
+        playerId: id,
+        previousElo: applied.previousElo,
+        newElo: applied.newElo,
+        delta: applied.appliedDelta,
+        reason: 'survival',
+      });
+    });
   } else {
     // No-killer mode, or self-kill in killer mode:
     // eliminated player is scored against the average of the 3 survivors,

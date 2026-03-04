@@ -4,7 +4,7 @@ import {
   expectedScore,
   calculateEliminationElo,
   calculateEliminationVsAverageElo,
-  calculateSurvivalBonus,
+  calculateKillerModeDistribution,
 } from '../src/lib/elo.ts';
 import { formatDelta, formatRating, roundToInternal } from '../src/lib/rating.ts';
 
@@ -29,14 +29,34 @@ test('elimination-vs-average returns survivor pool equal to eliminated loss magn
   assert.equal(survivorPool, -eliminatedDelta);
 });
 
-test('survival bonus has visible minimum gain', () => {
-  const highRated = calculateSurvivalBonus(1600, 1000, false);
-  const equalRated = calculateSurvivalBonus(1000, 1000, false);
-  const posOneEqual = calculateSurvivalBonus(1000, 1000, true);
+test('killer mode distribution is zero-sum', () => {
+  const { eliminatedDelta, killerDelta, bystanderDeltas } = calculateKillerModeDistribution(
+    1000, 1000, [1000, 1000]
+  );
+  const total = roundToInternal(eliminatedDelta + killerDelta + bystanderDeltas.reduce((s, d) => s + d, 0));
+  assert.equal(total, 0);
+});
 
-  assert.ok(highRated >= 1);
-  assert.ok(equalRated >= 1);
-  assert.ok(posOneEqual >= 1);
+test('killer mode distribution: equal ratings killer gets 2x each bystander', () => {
+  const { eliminatedDelta, killerDelta, bystanderDeltas } = calculateKillerModeDistribution(
+    1000, 1000, [1000, 1000]
+  );
+  // pool = 32 * 0.5 = 16; killer weight = 1.0, each bystander = 0.5, total = 2.0
+  // killer = 8, each bystander = 4, eliminated = -16
+  assert.equal(eliminatedDelta, -16);
+  assert.equal(killerDelta, 8);
+  assert.deepEqual(bystanderDeltas, [4, 4]);
+});
+
+test('killer mode distribution: harder kill earns more for killer', () => {
+  const easy = calculateKillerModeDistribution(800, 1200, [1000, 1000]);
+  const hard = calculateKillerModeDistribution(1200, 800, [1000, 1000]);
+  assert.ok(hard.killerDelta > easy.killerDelta);
+});
+
+test('killer mode distribution: weaker bystander earns more than stronger bystander', () => {
+  const { bystanderDeltas } = calculateKillerModeDistribution(1000, 1000, [800, 1200]);
+  assert.ok(bystanderDeltas[0] > bystanderDeltas[1]);
 });
 
 test('formatters display ratings/deltas with one decimal place', () => {
