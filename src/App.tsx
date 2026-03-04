@@ -140,9 +140,11 @@ export default function App() {
       ? 'Loading data...'
       : syncStatus === 'saving'
         ? 'Saving...'
-        : syncStatus === 'error'
-          ? 'Sync error'
-          : 'Synced';
+        : syncStatus === 'offline'
+          ? 'Offline · changes saved locally'
+          : syncStatus === 'error'
+            ? 'Sync error · will retry'
+            : 'Synced';
   const isAnalysisRoute = location.pathname === '/analysis';
 
   const appVersion = import.meta.env.VITE_APP_VERSION ?? 'dev';
@@ -163,6 +165,11 @@ export default function App() {
         }}
         logoutLabel={sampleMode ? 'Exit sample' : 'Sign out'}
       />
+      {!sampleMode && syncStatus === 'offline' && (
+        <div className="bg-amber-900 border-b border-amber-700 text-amber-200 text-xs text-center py-1.5 px-4">
+          You are offline — changes are saved locally and will sync when reconnected.
+        </div>
+      )}
       <main className={`${isAnalysisRoute ? 'max-w-7xl' : 'max-w-xl'} w-full mx-auto px-4 py-6 flex-1`}>
         <Routes>
           <Route path="/" element={<CourtPage />} />

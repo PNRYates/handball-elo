@@ -1,4 +1,6 @@
+import { useState } from 'react';
 import { useGameStore } from '../store/gameStore';
+import { loadSnapshots, type SnapshotEntry } from '../lib/localPersistence';
 
 interface SettingsPageProps {
   onLoadSampleData?: () => void;
@@ -11,6 +13,10 @@ export default function SettingsPage({ onLoadSampleData }: SettingsPageProps) {
   const setTheme = useGameStore((s) => s.setTheme);
   const setRequireKiller = useGameStore((s) => s.setRequireKiller);
   const setShowReserveButtons = useGameStore((s) => s.setShowReserveButtons);
+  const hydrateFromRemote = useGameStore((s) => s.hydrateFromRemote);
+
+  const [snapshots] = useState<SnapshotEntry[]>(() => loadSnapshots().reverse());
+  const [restoredIndex, setRestoredIndex] = useState<number | null>(null);
 
   return (
     <div className="space-y-4">
@@ -115,6 +121,55 @@ export default function SettingsPage({ onLoadSampleData }: SettingsPageProps) {
         >
           Switch to sample data
         </button>
+      </section>
+
+      <section className="bg-gray-800 border border-gray-700 rounded-lg p-4 space-y-3">
+        <div>
+          <h2 className="font-medium">Local Backups</h2>
+          <p className="text-xs text-gray-500 mt-0.5">
+            The last {snapshots.length > 0 ? Math.min(snapshots.length, 20) : 20} saves are kept
+            locally. Restore a snapshot to recover from accidental data loss.
+          </p>
+        </div>
+        {snapshots.length === 0 ? (
+          <p className="text-xs text-gray-500">No local snapshots available yet.</p>
+        ) : (
+          <ul className="space-y-2 max-h-64 overflow-y-auto">
+            {snapshots.map((snap, i) => {
+              const date = new Date(snap.savedAt);
+              const label = date.toLocaleString();
+              const playerCount = Object.keys(snap.state.players).length;
+              const gameCount = snap.state.gameHistory.length;
+              return (
+                <li
+                  key={snap.localRevision}
+                  className="flex items-center justify-between gap-3 text-xs"
+                >
+                  <span className="text-gray-300">
+                    {label}
+                    <span className="text-gray-500 ml-2">
+                      {playerCount} players · {gameCount} games
+                    </span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      hydrateFromRemote(snap.state);
+                      setRestoredIndex(i);
+                    }}
+                    className={`shrink-0 px-2 py-1 rounded border text-xs transition-colors ${
+                      restoredIndex === i
+                        ? 'bg-green-700 border-green-600 text-green-100'
+                        : 'bg-gray-900 border-gray-700 text-gray-300 hover:border-gray-500'
+                    }`}
+                  >
+                    {restoredIndex === i ? 'Restored' : 'Restore'}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
       </section>
     </div>
   );

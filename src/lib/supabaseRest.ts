@@ -206,9 +206,9 @@ function restHeaders(session: SupabaseSession): HeadersInit {
 export async function loadRemoteState(
   userId: string,
   session: SupabaseSession
-): Promise<PersistedGameState | null> {
+): Promise<{ state: PersistedGameState; updatedAt: string } | null> {
   const query = new URL(`${getSupabaseUrl()}/rest/v1/user_game_state`);
-  query.searchParams.set('select', 'state');
+  query.searchParams.set('select', 'state,updated_at');
   query.searchParams.set('user_id', `eq.${userId}`);
   query.searchParams.set('limit', '1');
 
@@ -220,12 +220,15 @@ export async function loadRemoteState(
     throw new Error('Failed to load game state from DB');
   }
 
-  const rows = (await res.json()) as Array<{ state?: PersistedGameState }>;
+  const rows = (await res.json()) as Array<{ state?: PersistedGameState; updated_at?: string }>;
   if (rows.length === 0 || !rows[0].state) {
     return null;
   }
 
-  return rows[0].state;
+  return {
+    state: rows[0].state,
+    updatedAt: rows[0].updated_at ?? new Date(0).toISOString(),
+  };
 }
 
 export async function saveRemoteState(
