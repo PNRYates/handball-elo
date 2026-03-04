@@ -86,21 +86,29 @@ test('killer mode allows #1 self-kill from store path', () => {
   assert.deepEqual(useGameStore.getState().court, ['bob', 'cara', 'dan', 'alice']);
 });
 
-test('killer mode allows non-#1 self-kill from store path', () => {
-  resetStore();
-  const store = useGameStore.getState();
+test('killer mode allows non-#1 self-kill from store path on every square', () => {
+  const expectations: Record<number, [string, string, string, string]> = {
+    1: ['alice', 'cara', 'dan', 'eve'],
+    2: ['alice', 'bob', 'dan', 'eve'],
+    3: ['alice', 'bob', 'cara', 'eve'],
+  };
 
-  store.setRequireKiller(true);
-  store.initializeGame(['Alice', 'Bob', 'Cara', 'Dan']);
-  useGameStore.getState().recordTurn(2, 2, 'Eve');
+  ([1, 2, 3] as const).forEach((eliminatedPos) => {
+    resetStore();
+    const store = useGameStore.getState();
 
-  const turn = useGameStore.getState().turns[0];
-  assert.equal(Boolean(turn), true);
-  assert.equal(turn.killerPosition, 2);
-  assert.equal(turn.eliminatedPosition, 2);
-  const hasKillerChange = turn.eloChanges.some((c) => c.reason === 'elimination_kill');
-  assert.equal(hasKillerChange, false);
-  assert.deepEqual(useGameStore.getState().court, ['alice', 'bob', 'dan', 'eve']);
+    store.setRequireKiller(true);
+    store.initializeGame(['Alice', 'Bob', 'Cara', 'Dan']);
+    useGameStore.getState().recordTurn(eliminatedPos, eliminatedPos, 'Eve');
+
+    const turn = useGameStore.getState().turns[0];
+    assert.equal(Boolean(turn), true);
+    assert.equal(turn.killerPosition, eliminatedPos);
+    assert.equal(turn.eliminatedPosition, eliminatedPos);
+    const hasKillerChange = turn.eloChanges.some((c) => c.reason === 'elimination_kill');
+    assert.equal(hasKillerChange, false);
+    assert.deepEqual(useGameStore.getState().court, expectations[eliminatedPos]);
+  });
 });
 
 test('recent entrants tracks most recent replacements', () => {
