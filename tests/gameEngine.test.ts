@@ -69,7 +69,7 @@ test('no-killer mode: eliminated loss is split across 3 survivors', () => {
 
   assert.equal(hasKillerChange, false);
   assert.equal(eliminatedDelta, -16);
-  assert.deepEqual(survivorDeltas, [5, 5, 6]);
+  assert.deepEqual(survivorDeltas, [5.333, 5.333, 5.334]);
   assert.equal(survivorTotal, 16);
   assert.equal(net, 0);
   assert.deepEqual(result.newCourt, ['a', 'b', 'd', 'eve']);

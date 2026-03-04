@@ -12,8 +12,8 @@ export function calculateEliminationElo(
   k: number = DEFAULT_K
 ): { killerDelta: number; eliminatedDelta: number } {
   const expected = expectedScore(killerRating, eliminatedRating);
-  const killerDelta = Math.round(k * (1 - expected));
-  const eliminatedDelta = Math.round(k * (0 - (1 - expected)));
+  const killerDelta = Math.round(k * (1 - expected) * 1000) / 1000;
+  const eliminatedDelta = Math.round(k * (0 - (1 - expected)) * 1000) / 1000;
   return { killerDelta, eliminatedDelta };
 }
 
@@ -23,7 +23,7 @@ export function calculateEliminationVsAverageElo(
   k: number = DEFAULT_K
 ): { eliminatedDelta: number; survivorPool: number } {
   const expected = expectedScore(eliminatedRating, averageOpponentRating);
-  const eliminatedDelta = Math.round(k * (0 - expected));
+  const eliminatedDelta = Math.round(k * (0 - expected) * 1000) / 1000;
   return { eliminatedDelta, survivorPool: -eliminatedDelta };
 }
 
@@ -36,5 +36,5 @@ export function calculateSurvivalBonus(
   const expected = expectedScore(survivorRating, averageOpponentRating);
   // Ensure survival always grants a visible passive gain.
   // Lower-rated survivors still earn a larger bonus via the expected-score term.
-  return Math.max(1, Math.round(k * (0.5 - expected)));
+  return Math.max(1, Math.round(k * (0.5 - expected) * 1000) / 1000);
 }
