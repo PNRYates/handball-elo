@@ -12,14 +12,26 @@ import {
   getCurrentUser,
   loginWithGoogle,
   logout,
+  listWorkspaces,
+  createWorkspace,
+  deleteWorkspace,
+  renameWorkspace,
   type SupabaseSession,
   type SupabaseUser,
 } from './lib/supabaseRest';
 import { useRemoteSync } from './lib/useRemoteSync';
 import { useGameStore } from './store/gameStore';
 import { buildSampleState } from './lib/sampleData';
+import type { Workspace } from './types';
 
 const SAMPLE_MODE_KEY = 'handball-elo-sample-mode';
+const WORKSPACE_ID_KEY = 'handball-elo-workspace-id';
+const DEFAULT_WORKSPACE_ID = 'default';
+const DEFAULT_WORKSPACE_NAME = 'Default';
+
+function generateWorkspaceId(): string {
+  return `ws_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
+}
 
 function LoginView({ error, onUseSample }: { error: string | null; onUseSample: () => void }) {
   return (
@@ -57,6 +69,13 @@ export default function App() {
   const [session, setSession] = useState<SupabaseSession | null>(null);
   const [user, setUser] = useState<SupabaseUser | null>(null);
   const [sampleMode, setSampleMode] = useState<boolean>(() => localStorage.getItem(SAMPLE_MODE_KEY) === 'true');
+  const [activeWorkspaceId, setActiveWorkspaceId] = useState<string>(
+    () => localStorage.getItem(WORKSPACE_ID_KEY) ?? DEFAULT_WORKSPACE_ID
+  );
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
+
+  const activeWorkspaceName =
+    workspaces.find((w) => w.id === activeWorkspaceId)?.name ?? DEFAULT_WORKSPACE_NAME;
 
   const enterSampleMode = useCallback(async () => {
     if (session) {
@@ -105,6 +124,32 @@ export default function App() {
 
       setSession(nextSession);
       setUser(nextUser);
+
+      // Load the workspaces list; seed a default entry if none exist yet.
+      try {
+        const remote = await listWorkspaces(nextUser.id, nextSession);
+        if (remote.length > 0) {
+          setWorkspaces(remote);
+          // Validate stored workspace still exists; fall back to first available.
+          const storedId = localStorage.getItem(WORKSPACE_ID_KEY) ?? DEFAULT_WORKSPACE_ID;
+          const valid = remote.find((w) => w.id === storedId);
+          const resolved = valid ? storedId : remote[0].id;
+          setActiveWorkspaceId(resolved);
+          localStorage.setItem(WORKSPACE_ID_KEY, resolved);
+        } else {
+          // No workspaces yet (brand new user) — use the default placeholder.
+          setWorkspaces([
+            { id: DEFAULT_WORKSPACE_ID, name: DEFAULT_WORKSPACE_NAME, updatedAt: new Date().toISOString() },
+          ]);
+          setActiveWorkspaceId(DEFAULT_WORKSPACE_ID);
+          localStorage.setItem(WORKSPACE_ID_KEY, DEFAULT_WORKSPACE_ID);
+        }
+      } catch {
+        // Non-fatal: workspace list fetch failed; continue with defaults.
+        setWorkspaces([
+          { id: DEFAULT_WORKSPACE_ID, name: DEFAULT_WORKSPACE_NAME, updatedAt: new Date().toISOString() },
+        ]);
+      }
     } catch (error) {
       setSession(null);
       setUser(null);
@@ -119,7 +164,78 @@ export default function App() {
     void bootAuth();
   }, [bootAuth]);
 
-  const syncStatus = useRemoteSync(user, session);
+  const handleSwitchWorkspace = useCallback((id: string) => {
+    setActiveWorkspaceId(id);
+    localStorage.setItem(WORKSPACE_ID_KEY, id);
+  }, []);
+
+  const handleCreateWorkspace = useCallback(
+    async (name: string) => {
+      if (!user || !session) return;
+      const id = generateWorkspaceId();
+      const now = new Date().toISOString();
+      const initial = useGameStore.getState();
+      try {
+        await createWorkspace(user.id, id, name, {
+          players: {},
+          court: ['', '', '', ''],
+          turns: [],
+          turnNumber: 0,
+          gameInProgress: false,
+          gameStartedAt: null,
+          gameHistory: [],
+          _lastSnapshot: null,
+          isInitialized: false,
+          theme: initial.theme,
+          requireKiller: initial.requireKiller,
+          showReserveButtons: initial.showReserveButtons,
+          undoStack: [],
+          redoStack: [],
+          recentEntrants: [],
+          hiddenPlayerIds: [],
+        }, session);
+        const newWorkspace: Workspace = { id, name, updatedAt: now };
+        setWorkspaces((prev) => [...prev, newWorkspace]);
+        handleSwitchWorkspace(id);
+      } catch {
+        // Silently ignore — user can retry.
+      }
+    },
+    [user, session, handleSwitchWorkspace]
+  );
+
+  const handleDeleteWorkspace = useCallback(
+    async (id: string) => {
+      if (!user || !session) return;
+      if (workspaces.length <= 1) return;
+      try {
+        await deleteWorkspace(user.id, id, session);
+        const remaining = workspaces.filter((w) => w.id !== id);
+        setWorkspaces(remaining);
+        if (activeWorkspaceId === id) {
+          handleSwitchWorkspace(remaining[0].id);
+        }
+      } catch {
+        // Silently ignore.
+      }
+    },
+    [user, session, workspaces, activeWorkspaceId, handleSwitchWorkspace]
+  );
+
+  const handleRenameWorkspace = useCallback(
+    async (id: string, name: string) => {
+      if (!user || !session) return;
+      try {
+        await renameWorkspace(user.id, id, name, session);
+        setWorkspaces((prev) => prev.map((w) => (w.id === id ? { ...w, name } : w)));
+      } catch {
+        // Silently ignore.
+      }
+    },
+    [user, session]
+  );
+
+  const syncStatus = useRemoteSync(user, session, activeWorkspaceId, activeWorkspaceName);
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
@@ -162,6 +278,12 @@ export default function App() {
           setUser(null);
         }}
         logoutLabel={sampleMode ? 'Exit sample' : 'Sign out'}
+        activeWorkspaceId={sampleMode ? undefined : activeWorkspaceId}
+        workspaces={sampleMode ? [] : workspaces}
+        onSwitchWorkspace={sampleMode ? undefined : handleSwitchWorkspace}
+        onCreateWorkspace={sampleMode ? undefined : (name) => void handleCreateWorkspace(name)}
+        onRenameWorkspace={sampleMode ? undefined : (id, name) => void handleRenameWorkspace(id, name)}
+        onDeleteWorkspace={sampleMode ? undefined : (id) => void handleDeleteWorkspace(id)}
       />
       <main className={`${isAnalysisRoute ? 'max-w-7xl' : 'max-w-xl'} w-full mx-auto px-4 py-6 flex-1`}>
         <Routes>
@@ -179,3 +301,4 @@ export default function App() {
     </div>
   );
 }
+

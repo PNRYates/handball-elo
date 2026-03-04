@@ -46,3 +46,9 @@ export interface CompletedGame {
   startingCourt: [string, string, string, string];
   finalCourt: [string, string, string, string];
 }
+
+export interface Workspace {
+  id: string;
+  name: string;
+  updatedAt: string;
+}

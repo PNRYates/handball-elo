@@ -16,14 +16,19 @@ export type SyncStatus = 'idle' | 'loading' | 'saving' | 'error';
 
 const SAVE_DEBOUNCE_MS = 700;
 
-export function useRemoteSync(user: SupabaseUser | null, session: SupabaseSession | null): SyncStatus {
+export function useRemoteSync(
+  user: SupabaseUser | null,
+  session: SupabaseSession | null,
+  workspaceId: string,
+  workspaceName: string
+): SyncStatus {
   const [status, setStatus] = useState<SyncStatus>('idle');
   const loadedRef = useRef(false);
 
   const identity = useMemo(() => {
     if (!user || !session) return null;
-    return `${user.id}:${session.accessToken.slice(0, 12)}`;
-  }, [user, session]);
+    return `${user.id}:${workspaceId}:${session.accessToken.slice(0, 12)}`;
+  }, [user, session, workspaceId]);
 
   useEffect(() => {
     let active = true;
@@ -33,11 +38,13 @@ export function useRemoteSync(user: SupabaseUser | null, session: SupabaseSessio
       return;
     }
 
+    // Reset store when switching workspace so stale data is not shown.
+    useGameStore.getState().resetAllData();
     queueMicrotask(() => setStatus('loading'));
 
     (async () => {
       try {
-        const remote = await loadRemoteState(user.id, session);
+        const remote = await loadRemoteState(user.id, workspaceId, session);
         if (!active) return;
         if (remote) {
           useGameStore.getState().hydrateFromRemote(sanitizePersistedGameState(remote));
@@ -55,7 +62,7 @@ export function useRemoteSync(user: SupabaseUser | null, session: SupabaseSessio
       active = false;
       loadedRef.current = false;
     };
-  }, [identity, user, session]);
+  }, [identity, user, session, workspaceId]);
 
   useEffect(() => {
     if (!user || !session) return;
@@ -74,7 +81,7 @@ export function useRemoteSync(user: SupabaseUser | null, session: SupabaseSessio
       timeoutId = setTimeout(async () => {
         try {
           setStatus('saving');
-          await saveRemoteState(user.id, payloadState, session);
+          await saveRemoteState(user.id, workspaceId, workspaceName, payloadState, session);
           lastSaved = payloadString;
           setStatus('idle');
         } catch {
@@ -87,7 +94,7 @@ export function useRemoteSync(user: SupabaseUser | null, session: SupabaseSessio
       unsubscribe();
       if (timeoutId) clearTimeout(timeoutId);
     };
-  }, [identity, user, session]);
+  }, [identity, user, session, workspaceId, workspaceName]);
 
   return status;
 }
