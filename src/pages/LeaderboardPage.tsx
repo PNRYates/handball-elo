@@ -1,11 +1,12 @@
 import { useState, useRef, useEffect } from 'react';
-import { useGameStore } from '../store/gameStore';
+import { selectActiveWorkspace, useGameStore } from '../store/gameStore';
+import { formatRating } from '../lib/rating';
 
 export default function LeaderboardPage() {
-  const players = useGameStore((s) => s.players);
+  const players = useGameStore((s) => selectActiveWorkspace(s).players);
   const renamePlayer = useGameStore((s) => s.renamePlayer);
   const hidePlayer = useGameStore((s) => s.hidePlayer);
-  const hiddenPlayerIds = useGameStore((s) => s.hiddenPlayerIds);
+  const hiddenPlayerIds = useGameStore((s) => selectActiveWorkspace(s).hiddenPlayerIds);
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
@@ -96,7 +97,7 @@ export default function LeaderboardPage() {
               </div>
             </div>
             <div className="text-right shrink-0 ml-3 flex items-center gap-2">
-              <div className="font-mono font-bold text-lg">{player.elo}</div>
+              <div className="font-mono font-bold text-lg">{formatRating(player.elo)}</div>
               <button
                 type="button"
                 onClick={() => hidePlayer(player.id)}

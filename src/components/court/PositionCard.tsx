@@ -1,4 +1,5 @@
 import type { Player } from '../../types';
+import { formatRating } from '../../lib/rating';
 
 type SelectionState = 'none' | 'killer' | 'eliminated';
 
@@ -67,7 +68,7 @@ export default function PositionCard({
         </span>
       )}
       <div className="text-right shrink-0">
-        <div className="text-sm font-mono font-bold">{player.elo}</div>
+        <div className="text-sm font-mono font-bold">{formatRating(player.elo)}</div>
       </div>
     </button>
   );

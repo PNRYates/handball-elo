@@ -87,10 +87,33 @@ test('no-killer mode: eliminated loss is split across 3 survivors', () => {
 
   assert.equal(hasKillerChange, false);
   assert.equal(eliminatedDelta, -16);
-  assert.deepEqual(survivorDeltas, [5, 5, 6]);
+  assert.deepEqual(survivorDeltas, [5.333, 5.333, 5.334]);
   assert.equal(survivorTotal, 16);
   assert.equal(net, 0);
   assert.deepEqual(result.newCourt, ['a', 'b', 'd', 'eve']);
+});
+
+test('processTurn keeps elo values and deltas at 3-decimal precision', () => {
+  const players = createPlayers();
+  players.a.elo = 1011.127;
+  players.b.elo = 987.913;
+  players.c.elo = 1004.421;
+  players.d.elo = 998.227;
+  const result = processTurn(['a', 'b', 'c', 'd'], players, 2, 0, 'Eve', true);
+
+  const precisionOk = Object.values(result.updatedPlayers).every(
+    (p) => Math.round(p.elo * 1000) === p.elo * 1000
+  );
+  const changesPrecisionOk = result.eloChanges.every(
+    (c) =>
+      Math.round(c.previousElo * 1000) === c.previousElo * 1000 &&
+      Math.round(c.newElo * 1000) === c.newElo * 1000 &&
+      Math.round(c.delta * 1000) === c.delta * 1000
+  );
+
+  assert.equal(precisionOk, true);
+  assert.equal(changesPrecisionOk, true);
+  assert.equal(result.eloChanges.reduce((sum, c) => sum + c.delta, 0), 0);
 });
 
 test('processTurn does not mutate original input players map', () => {

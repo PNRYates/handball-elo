@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { useGameStore } from '../store/gameStore';
+import { selectActiveWorkspace, useGameStore } from '../store/gameStore';
 import {
   buildHeadToHead,
   buildPerformanceTrends,
@@ -11,17 +11,8 @@ import {
   topRivalries,
 } from '../lib/analyticsEngine';
 import { computePopoverPosition } from '../lib/popover';
-import type { AnalyticsFilterState, AnalyticsScope, HeadToHeadRow } from '../types/analytics';
-
-const defaultFilter: AnalyticsFilterState = {
-  scope: 'all_time',
-  includeCurrentGame: true,
-  minTurnsThreshold: 5,
-  rangeStartGameId: null,
-  rangeEndGameId: null,
-  dateStart: null,
-  dateEnd: null,
-};
+import { formatDelta, formatRating } from '../lib/rating';
+import type { AnalyticsScope, HeadToHeadRow } from '../types/analytics';
 
 function pct(v: number): string {
   return `${(v * 100).toFixed(1)}%`;
@@ -294,7 +285,7 @@ function LineChartCard({
             <g key={tick}>
               <line x1={padL} y1={toY(tick)} x2={chartWidth - padR} y2={toY(tick)} stroke="#374151" strokeDasharray="4 4" />
               <text x={padL - 8} y={toY(tick) + 4} textAnchor="end" fontSize="10" fill="#9ca3af">
-                {tick.toFixed(0)}
+                {formatRating(tick)}
               </text>
             </g>
           ))}
@@ -350,7 +341,7 @@ function LineChartCard({
                     <span className="w-2 h-2 rounded-full" style={{ background: colors[i % colors.length] }} />
                     {players[id]?.name ?? id}
                   </span>
-                  <span className="font-mono">{(hoverPoint.values[id] ?? 0).toFixed(1)}</span>
+                  <span className="font-mono">{formatDelta(hoverPoint.values[id] ?? 0)}</span>
                 </div>
               ))}
             </div>
@@ -371,17 +362,24 @@ function LineChartCard({
 }
 
 export default function AnalysisPage() {
-  const turns = useGameStore((s) => s.turns);
-  const gameHistory = useGameStore((s) => s.gameHistory);
-  const players = useGameStore((s) => s.players);
-
-  const [filter, setFilter] = useState<AnalyticsFilterState>(defaultFilter);
-  const [selectedPlayers, setSelectedPlayers] = useState<string[]>([]);
-  const [h2hSort, setH2hSort] = useState<'volume' | 'net' | 'ratio'>('volume');
-  const [h2hPlayers, setH2hPlayers] = useState<string[]>([]);
-  const [trendWindow, setTrendWindow] = useState<'all' | '50' | '20'>('all');
-  const [tableRowsVisible, setTableRowsVisible] = useState(12);
-  const [h2hRowsVisible, setH2hRowsVisible] = useState(20);
+  const workspace = useGameStore((s) => selectActiveWorkspace(s));
+  const setFilter = useGameStore((s) => s.setAnalyticsFilter);
+  const setSelectedPlayers = useGameStore((s) => s.setSelectedPlayers);
+  const setH2hSort = useGameStore((s) => s.setH2hSort);
+  const setH2hPlayers = useGameStore((s) => s.setH2hPlayers);
+  const setTrendWindow = useGameStore((s) => s.setTrendWindow);
+  const setTableRowsVisible = useGameStore((s) => s.setTableRowsVisible);
+  const setH2hRowsVisible = useGameStore((s) => s.setH2hRowsVisible);
+  const turns = workspace.turns;
+  const gameHistory = workspace.gameHistory;
+  const players = workspace.players;
+  const filter = workspace.analytics.filter;
+  const selectedPlayers = workspace.analytics.selectedPlayers;
+  const h2hSort = workspace.analytics.h2hSort;
+  const h2hPlayers = workspace.analytics.h2hPlayers;
+  const trendWindow = workspace.analytics.trendWindow;
+  const tableRowsVisible = workspace.analytics.tableRowsVisible;
+  const h2hRowsVisible = workspace.analytics.h2hRowsVisible;
 
   const filtered = useMemo(() => getFilteredTurns(turns, gameHistory, filter), [turns, gameHistory, filter]);
   const defaultPlayers = useMemo(() => defaultSelectedPlayers(filtered), [filtered]);
@@ -445,7 +443,7 @@ export default function AnalysisPage() {
             <button
               key={scope}
               type="button"
-              onClick={() => setFilter((f) => ({ ...f, scope }))}
+              onClick={() => setFilter({ ...filter, scope })}
               className={`px-2.5 py-1.5 text-xs rounded border ${filter.scope === scope ? 'bg-amber-600 text-white border-amber-500' : 'bg-gray-900 border-gray-700 text-gray-300'}`}
             >
               {scopeLabel(scope)}
@@ -457,7 +455,7 @@ export default function AnalysisPage() {
             <input
               type="checkbox"
               checked={filter.includeCurrentGame}
-              onChange={(e) => setFilter((f) => ({ ...f, includeCurrentGame: e.target.checked }))}
+              onChange={(e) => setFilter({ ...filter, includeCurrentGame: e.target.checked })}
             />
             <InlineExplain label="Include current game" text="If checked, analytics include in-progress turns from the active game." />
           </label>
@@ -468,7 +466,7 @@ export default function AnalysisPage() {
               min={1}
               className="w-16 bg-gray-900 border border-gray-700 rounded px-2 py-1"
               value={filter.minTurnsThreshold}
-              onChange={(e) => setFilter((f) => ({ ...f, minTurnsThreshold: Number(e.target.value) || 1 }))}
+              onChange={(e) => setFilter({ ...filter, minTurnsThreshold: Number(e.target.value) || 1 })}
             />
           </label>
           {filter.scope === 'game_range' && (
@@ -479,7 +477,12 @@ export default function AnalysisPage() {
                   type="number"
                   className="w-16 bg-gray-900 border border-gray-700 rounded px-2 py-1"
                   value={filter.rangeStartGameId ?? ''}
-                  onChange={(e) => setFilter((f) => ({ ...f, rangeStartGameId: e.target.value ? Number(e.target.value) : null }))}
+                  onChange={(e) =>
+                    setFilter({
+                      ...filter,
+                      rangeStartGameId: e.target.value ? Number(e.target.value) : null,
+                    })
+                  }
                 />
               </label>
               <label className="inline-flex items-center gap-2">
@@ -488,7 +491,12 @@ export default function AnalysisPage() {
                   type="number"
                   className="w-16 bg-gray-900 border border-gray-700 rounded px-2 py-1"
                   value={filter.rangeEndGameId ?? ''}
-                  onChange={(e) => setFilter((f) => ({ ...f, rangeEndGameId: e.target.value ? Number(e.target.value) : null }))}
+                  onChange={(e) =>
+                    setFilter({
+                      ...filter,
+                      rangeEndGameId: e.target.value ? Number(e.target.value) : null,
+                    })
+                  }
                 />
               </label>
             </>
@@ -499,7 +507,7 @@ export default function AnalysisPage() {
               type="date"
               className="bg-gray-900 border border-gray-700 rounded px-2 py-1"
               value={filter.dateStart ?? ''}
-              onChange={(e) => setFilter((f) => ({ ...f, dateStart: e.target.value || null }))}
+              onChange={(e) => setFilter({ ...filter, dateStart: e.target.value || null })}
             />
           </label>
           <label className="inline-flex items-center gap-2">
@@ -508,7 +516,7 @@ export default function AnalysisPage() {
               type="date"
               className="bg-gray-900 border border-gray-700 rounded px-2 py-1"
               value={filter.dateEnd ?? ''}
-              onChange={(e) => setFilter((f) => ({ ...f, dateEnd: e.target.value || null }))}
+              onChange={(e) => setFilter({ ...filter, dateEnd: e.target.value || null })}
             />
           </label>
         </div>
@@ -545,12 +553,12 @@ export default function AnalysisPage() {
                 key={p.id}
                 type="button"
                 onClick={() =>
-                  setSelectedPlayers((ids) => {
-                    const base = ids.length > 0 ? ids : defaultPlayers;
+                  setSelectedPlayers((() => {
+                    const base = selectedPlayers.length > 0 ? selectedPlayers : defaultPlayers;
                     return base.includes(p.id)
                       ? base.filter((id) => id !== p.id)
                       : [...base, p.id];
-                  })
+                  })())
                 }
                 className={`text-xs px-2 py-1 rounded border ${active ? 'bg-amber-600 border-amber-500 text-white' : 'bg-gray-900 border-gray-700 text-gray-300'}`}
               >
@@ -601,12 +609,12 @@ export default function AnalysisPage() {
               {combinedRows.map((row) => (
                 <tr key={row.playerId} className="border-b border-gray-800 last:border-b-0">
                   <td className="py-1.5 pr-2 font-medium">{row.playerName}</td>
-                  <td className={`py-1.5 pr-2 font-mono ${statClass(row.netElo10)}`}>{row.netElo10}</td>
-                  <td className={`py-1.5 pr-2 font-mono ${statClass(row.netElo20)}`}>{row.netElo20}</td>
+                  <td className={`py-1.5 pr-2 font-mono ${statClass(row.netElo10)}`}>{formatDelta(row.netElo10)}</td>
+                  <td className={`py-1.5 pr-2 font-mono ${statClass(row.netElo20)}`}>{formatDelta(row.netElo20)}</td>
                   <td className="py-1.5 pr-2 font-mono">{pct(row.killRate10)}</td>
-                  <td className={`py-1.5 pr-2 font-mono ${statClass(row.momentum10)}`}>{row.momentum10.toFixed(2)}</td>
-                  <td className="py-1.5 pr-2 font-mono">{row.volatility.toFixed(2)}</td>
-                  <td className={`py-1.5 pr-2 font-mono ${statClass(row.avgDelta)}`}>{row.avgDelta.toFixed(2)}</td>
+                  <td className={`py-1.5 pr-2 font-mono ${statClass(row.momentum10)}`}>{formatDelta(row.momentum10)}</td>
+                  <td className="py-1.5 pr-2 font-mono">{formatRating(row.volatility)}</td>
+                  <td className={`py-1.5 pr-2 font-mono ${statClass(row.avgDelta)}`}>{formatDelta(row.avgDelta)}</td>
                 </tr>
               ))}
             </tbody>
@@ -644,7 +652,11 @@ export default function AnalysisPage() {
                   <button
                     key={`h2h-${p.id}`}
                     type="button"
-                    onClick={() => setH2hPlayers((current) => active ? current.filter((id) => id !== p.id) : [...current, p.id])}
+                    onClick={() =>
+                      setH2hPlayers(
+                        active ? h2hPlayers.filter((id) => id !== p.id) : [...h2hPlayers, p.id]
+                      )
+                    }
                     className={`text-xs px-2 py-1 rounded border ${active ? 'bg-amber-600 border-amber-500 text-white' : 'bg-gray-900 border-gray-700 text-gray-300 hover:border-gray-500'}`}
                   >
                     {p.name}
@@ -688,7 +700,7 @@ export default function AnalysisPage() {
                     <td className="py-1.5 pr-2 font-mono">{row.turnsTogether}</td>
                     <td className="py-1.5 pr-2 font-mono">{row.killsAonB}-{row.killsBonA}</td>
                     <td className="py-1.5 pr-2 font-mono">{row.killRatioA.toFixed(2)}</td>
-                    <td className={`py-1.5 pr-2 font-mono ${statClass(row.netEloAminusB)}`}>{row.netEloAminusB.toFixed(2)}</td>
+                    <td className={`py-1.5 pr-2 font-mono ${statClass(row.netEloAminusB)}`}>{formatDelta(row.netEloAminusB)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -726,7 +738,7 @@ export default function AnalysisPage() {
             </div>
             <div className="border border-gray-700 rounded-lg p-3">
               <p className="text-gray-500 text-xs mb-1"><InlineExplain label="Entry Impact (first 3 turns)" text="Average net Elo across a player's first 3 turns after entering at #4." /></p>
-              <p className={`font-semibold ${statClass(strategy.entryImpact.averageThreeTurnNet)}`}>{strategy.entryImpact.averageThreeTurnNet}</p>
+              <p className={`font-semibold ${statClass(strategy.entryImpact.averageThreeTurnNet)}`}>{formatDelta(strategy.entryImpact.averageThreeTurnNet)}</p>
               <p className="text-xs text-gray-500 mt-1">{strategy.entryImpact.entries} entries sampled</p>
             </div>
             <div className="border border-gray-700 rounded-lg p-3">
@@ -735,7 +747,7 @@ export default function AnalysisPage() {
                 {strategy.rotationEfficiency.map((r) => (
                   <div key={r.position} className="flex justify-between">
                     <span>#{r.position + 1}</span>
-                    <span className={statClass(r.avgDelta)}>{r.avgDelta}</span>
+                    <span className={statClass(r.avgDelta)}>{formatDelta(r.avgDelta)}</span>
                   </div>
                 ))}
               </div>

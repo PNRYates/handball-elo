@@ -1,10 +1,11 @@
 import { useState, useRef } from 'react';
-import { useGameStore } from '../../store/gameStore';
+import { selectActiveWorkspace, useGameStore } from '../../store/gameStore';
+import { formatRating } from '../../lib/rating';
 
 export default function InitialSetup() {
   const [names, setNames] = useState(['', '', '', '']);
   const initializeGame = useGameStore((s) => s.initializeGame);
-  const players = useGameStore((s) => s.players);
+  const players = useGameStore((s) => selectActiveWorkspace(s).players);
   const resetAllData = useGameStore((s) => s.resetAllData);
 
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
@@ -87,7 +88,7 @@ export default function InitialSetup() {
                       onClick={() => fillPlayer(i, p.name)}
                       className="text-[clamp(0.72rem,2.4vw,0.9rem)] bg-gray-800 border border-gray-700 hover:border-amber-500 text-gray-400 hover:text-amber-300 px-[clamp(0.55rem,2vw,0.85rem)] py-[clamp(0.35rem,1.2vw,0.55rem)] rounded-md transition-colors whitespace-nowrap"
                     >
-                      {p.name} <span className="text-gray-600">{p.elo}</span>
+                      {p.name} <span className="text-gray-600">{formatRating(p.elo)}</span>
                     </button>
                   ))}
                 </div>

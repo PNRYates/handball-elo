@@ -6,6 +6,7 @@ import {
   calculateEliminationVsAverageElo,
   calculateSurvivalBonus,
 } from '../src/lib/elo.ts';
+import { formatDelta, formatRating, roundToInternal } from '../src/lib/rating.ts';
 
 test('expectedScore is complementary', () => {
   const a = expectedScore(1200, 1000);
@@ -18,6 +19,8 @@ test('killer/eliminated Elo change is zero-sum in direct duel', () => {
   assert.equal(killerDelta + eliminatedDelta, 0);
   assert.ok(killerDelta > 0);
   assert.ok(eliminatedDelta < 0);
+  assert.equal(roundToInternal(killerDelta), killerDelta);
+  assert.equal(roundToInternal(eliminatedDelta), eliminatedDelta);
 });
 
 test('elimination-vs-average returns survivor pool equal to eliminated loss magnitude', () => {
@@ -34,4 +37,12 @@ test('survival bonus has visible minimum gain', () => {
   assert.ok(highRated >= 1);
   assert.ok(equalRated >= 1);
   assert.ok(posOneEqual >= 1);
+});
+
+test('formatters display ratings/deltas with one decimal place', () => {
+  assert.equal(formatRating(1000), '1000.0');
+  assert.equal(formatRating(1000.049), '1000.0');
+  assert.equal(formatDelta(2.36), '+2.4');
+  assert.equal(formatDelta(-2.36), '-2.4');
+  assert.equal(formatDelta(0), '0.0');
 });

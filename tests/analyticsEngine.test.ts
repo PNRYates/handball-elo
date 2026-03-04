@@ -280,3 +280,44 @@ test('buildPlayerSummary includes players appearing only in courtAfter', () => {
   const summary = buildPlayerSummary([{ gameId: 1, gameLabel: 'Game #1', turn }]);
   assert.equal(summary.uniquePlayers, 5);
 });
+
+test('analytics keep 3-decimal precision for derived delta metrics', () => {
+  const turnA: Turn = {
+    turnNumber: 0,
+    timestamp: Date.now(),
+    courtBefore: ['a', 'b', 'c', 'd'],
+    eliminatedPlayerId: 'd',
+    eliminatedPosition: 3,
+    killerPlayerId: 'a',
+    killerPosition: 0,
+    newPlayerId: null,
+    courtAfter: ['a', 'b', 'c', 'd'],
+    eloChanges: [
+      { playerId: 'a', previousElo: 1000, newElo: 1000.333, delta: 0.333, reason: 'elimination_kill' },
+      { playerId: 'd', previousElo: 1000, newElo: 999.667, delta: -0.333, reason: 'elimination_death' },
+    ],
+  };
+  const turnB: Turn = {
+    ...turnA,
+    turnNumber: 1,
+    timestamp: Date.now() + 1,
+    eloChanges: [
+      { playerId: 'a', previousElo: 1000.333, newElo: 1001, delta: 0.667, reason: 'survival' },
+      { playerId: 'd', previousElo: 999.667, newElo: 999, delta: -0.667, reason: 'elimination_death' },
+    ],
+  };
+
+  const result = buildPerformanceTrends(
+    [
+      { gameId: 1, gameLabel: 'Game #1', turn: turnA },
+      { gameId: 1, gameLabel: 'Game #1', turn: turnB },
+    ],
+    players,
+    ['a']
+  );
+
+  const vol = result.volatility.find((row) => row.playerId === 'a');
+  assert.ok(vol);
+  assert.equal(vol?.averageDelta, 0.5);
+  assert.equal(vol?.volatility, 0.167);
+});
