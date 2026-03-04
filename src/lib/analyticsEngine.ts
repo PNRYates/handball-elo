@@ -22,6 +22,11 @@ function round2(n: number): number {
   return Math.round(n * 100) / 100;
 }
 
+function isDirectKillTurn(turn: Turn): boolean {
+  if (turn.killerPlayerId === turn.eliminatedPlayerId) return false;
+  return turn.eloChanges.some((change) => change.reason === 'elimination_kill');
+}
+
 function toDateStartMs(value: string | null): number | null {
   if (!value) return null;
   return new Date(`${value}T00:00:00`).getTime();
@@ -134,7 +139,9 @@ export function buildPerformanceTrends(
       const net20 = recent20.reduce((sum, t) => sum + getPlayerDelta(t.turn, id), 0);
       const net10 = recent10.reduce((sum, t) => sum + getPlayerDelta(t.turn, id), 0);
       const turnsPlayed10 = recent10.filter((t) => t.turn.courtBefore.includes(id)).length;
-      const kills10 = recent10.filter((t) => t.turn.killerPlayerId === id).length;
+      const kills10 = recent10.filter(
+        (t) => isDirectKillTurn(t.turn) && t.turn.killerPlayerId === id
+      ).length;
       const deaths10 = recent10.filter((t) => t.turn.eliminatedPlayerId === id).length;
       return {
         playerId: id,
@@ -302,8 +309,7 @@ export function buildPositionStrategy(turns: TimelineTurn[]): PositionStrategyMe
 
   for (const { turn } of turns) {
     eliminations[turn.eliminatedPosition] += 1;
-    const hasDirectKill = turn.eloChanges.some((change) => change.reason === 'elimination_kill');
-    if (hasDirectKill) {
+    if (isDirectKillTurn(turn)) {
       kills[turn.killerPosition] += 1;
     }
   }
