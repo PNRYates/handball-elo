@@ -360,9 +360,11 @@ export default function App() {
   }, [theme]);
 
   if (publicSlug) {
+    const isPublicAnalysisRoute = location.pathname === `/public/${publicSlug}/analysis`;
+
     return (
       <div className="min-h-screen bg-gray-950 text-gray-100 px-4 py-6">
-        <div className="max-w-xl mx-auto">
+        <div className={`${isPublicAnalysisRoute ? 'max-w-7xl' : 'max-w-xl'} mx-auto`}>
           {publicLoading ? (
             <p className="text-sm text-gray-400">Loading published workspace…</p>
           ) : publicError ? (
