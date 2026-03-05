@@ -291,7 +291,7 @@ export default function App() {
         activeWorkspaceId={sampleMode ? undefined : activeWorkspaceId}
         workspaces={sampleMode ? [] : workspaces}
         onSwitchWorkspace={sampleMode ? undefined : handleSwitchWorkspace}
-        onCreateWorkspace={sampleMode ? undefined : (name) => void handleCreateWorkspace(name)}
+        onCreateWorkspace={sampleMode ? undefined : (name) => void handleCreateWorkspace(name ?? '')}
         onRenameWorkspace={sampleMode ? undefined : (id, name) => void handleRenameWorkspace(id, name)}
         onDeleteWorkspace={sampleMode ? undefined : (id) => void handleDeleteWorkspace(id)}
       />
@@ -302,7 +302,20 @@ export default function App() {
           <Route path="/history" element={<HistoryPage />} />
           <Route path="/analysis" element={<AnalysisPage />} />
           <Route path="/instructions" element={<InstructionsPage />} />
-          <Route path="/settings" element={<SettingsPage onLoadSampleData={() => void enterSampleMode()} />} />
+          <Route
+            path="/settings"
+            element={
+              <SettingsPage
+                onLoadSampleData={() => void enterSampleMode()}
+                activeWorkspaceId={sampleMode ? undefined : activeWorkspaceId}
+                workspaces={sampleMode ? undefined : workspaces}
+                onSwitchWorkspace={sampleMode ? undefined : handleSwitchWorkspace}
+                onCreateWorkspace={sampleMode ? undefined : (name) => void handleCreateWorkspace(name ?? '')}
+                onRenameWorkspace={sampleMode ? undefined : (id, name) => void handleRenameWorkspace(id, name)}
+                onDeleteWorkspace={sampleMode ? undefined : (id) => void handleDeleteWorkspace(id)}
+              />
+            }
+          />
         </Routes>
       </main>
       <footer className="w-full px-4 pb-4 text-xs text-gray-500 text-center mt-auto">
