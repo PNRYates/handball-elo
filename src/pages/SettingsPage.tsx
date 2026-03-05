@@ -158,7 +158,7 @@ export default function SettingsPage({
         <div>
           <h2 className="font-medium">Publish workspace</h2>
           <p className="text-xs text-gray-500 mt-0.5">
-            Claim a permanent slug and publish a snapshot of this workspace to a public URL.
+            Claim a permanent slug and publish this workspace to a public URL. Changes auto-update live.
           </p>
         </div>
         <div className="grid gap-2 sm:grid-cols-[1fr_auto_auto]">
