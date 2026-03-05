@@ -1,30 +1,53 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { selectActiveWorkspace, useGameStore } from '../store/gameStore';
+import type { Workspace } from '../types';
 
 interface SettingsPageProps {
   onLoadSampleData?: () => void;
+  activeWorkspaceId?: string;
+  workspaces?: Workspace[];
+  onSwitchWorkspace?: (id: string) => void;
+  onCreateWorkspace?: (name?: string) => void;
+  onRenameWorkspace?: (id: string, name: string) => void;
+  onDeleteWorkspace?: (id: string) => void;
 }
 
-export default function SettingsPage({ onLoadSampleData }: SettingsPageProps) {
+export default function SettingsPage({
+  onLoadSampleData,
+  activeWorkspaceId,
+  workspaces,
+  onSwitchWorkspace,
+  onCreateWorkspace,
+  onRenameWorkspace,
+  onDeleteWorkspace,
+}: SettingsPageProps) {
   const workspace = useGameStore((s) => selectActiveWorkspace(s));
-  const workspaceMap = useGameStore((s) => s.workspaces);
-  const activeWorkspaceId = useGameStore((s) => s.activeWorkspaceId);
   const setTheme = useGameStore((s) => s.setTheme);
   const setRequireKiller = useGameStore((s) => s.setRequireKiller);
   const setShowReserveButtons = useGameStore((s) => s.setShowReserveButtons);
-  const createWorkspace = useGameStore((s) => s.createWorkspace);
-  const renameWorkspace = useGameStore((s) => s.renameWorkspace);
-  const deleteWorkspace = useGameStore((s) => s.deleteWorkspace);
-  const switchWorkspace = useGameStore((s) => s.switchWorkspace);
 
-  const workspaces = useMemo(() => Object.values(workspaceMap), [workspaceMap]);
+  const effectiveActiveWorkspaceId = activeWorkspaceId ?? workspace.id;
+  const effectiveWorkspaces = useMemo(
+    () =>
+      (workspaces ?? [{ id: workspace.id, name: workspace.name, updatedAt: new Date(workspace.createdAt).toISOString() }]).map((item) => ({
+        ...item,
+        sortKey: Date.parse(item.updatedAt) || 0,
+      })),
+    [workspaces, workspace.id, workspace.name, workspace.createdAt]
+  );
 
   const [newWorkspaceName, setNewWorkspaceName] = useState('');
-  const [renameDraft, setRenameDraft] = useState(() => workspace.name);
+  const activeWorkspaceName =
+    effectiveWorkspaces.find((item) => item.id === effectiveActiveWorkspaceId)?.name ?? workspace.name;
+  const [renameDraft, setRenameDraft] = useState(activeWorkspaceName);
+
+  useEffect(() => {
+    setRenameDraft(activeWorkspaceName);
+  }, [activeWorkspaceName]);
 
   const sortedWorkspaces = useMemo(
-    () => [...workspaces].sort((a, b) => a.createdAt - b.createdAt),
-    [workspaces]
+    () => [...effectiveWorkspaces].sort((a, b) => a.sortKey - b.sortKey),
+    [effectiveWorkspaces]
   );
 
   return (
@@ -41,13 +64,13 @@ export default function SettingsPage({ onLoadSampleData }: SettingsPageProps) {
 
         <div className="flex flex-wrap gap-2">
           {sortedWorkspaces.map((item) => {
-            const active = item.id === activeWorkspaceId;
+            const active = item.id === effectiveActiveWorkspaceId;
             return (
               <button
                 key={item.id}
                 type="button"
                 onClick={() => {
-                  switchWorkspace(item.id);
+                  onSwitchWorkspace?.(item.id);
                   setRenameDraft(item.name);
                 }}
                 className={`px-3 py-1.5 text-sm rounded border transition-colors ${
@@ -73,7 +96,7 @@ export default function SettingsPage({ onLoadSampleData }: SettingsPageProps) {
           <button
             type="button"
             onClick={() => {
-              createWorkspace(newWorkspaceName.trim() || undefined);
+              onCreateWorkspace?.(newWorkspaceName.trim() || undefined);
               setNewWorkspaceName('');
             }}
             className="px-3 py-2 rounded border text-sm bg-gray-900 border-gray-700 text-gray-300 hover:border-gray-500 transition-colors"
@@ -92,7 +115,10 @@ export default function SettingsPage({ onLoadSampleData }: SettingsPageProps) {
           />
           <button
             type="button"
-            onClick={() => renameWorkspace(activeWorkspaceId, renameDraft)}
+            onClick={() => {
+              if (!effectiveActiveWorkspaceId) return;
+              onRenameWorkspace?.(effectiveActiveWorkspaceId, renameDraft);
+            }}
             className="px-3 py-2 rounded border text-sm bg-gray-900 border-gray-700 text-gray-300 hover:border-gray-500 transition-colors"
           >
             Rename
@@ -100,12 +126,12 @@ export default function SettingsPage({ onLoadSampleData }: SettingsPageProps) {
           <button
             type="button"
             onClick={() => {
-              if (workspaces.length <= 1) return;
-              if (window.confirm(`Delete workspace "${workspace.name}" and all its data?`)) {
-                deleteWorkspace(activeWorkspaceId);
+              if (!effectiveActiveWorkspaceId || effectiveWorkspaces.length <= 1) return;
+              if (window.confirm(`Delete workspace "${activeWorkspaceName}" and all its data?`)) {
+                onDeleteWorkspace?.(effectiveActiveWorkspaceId);
               }
             }}
-            disabled={workspaces.length <= 1}
+            disabled={effectiveWorkspaces.length <= 1}
             className="px-3 py-2 rounded border text-sm bg-gray-900 border-red-900 text-red-300 hover:border-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Delete active
