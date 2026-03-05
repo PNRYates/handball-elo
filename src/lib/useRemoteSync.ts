@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   loadRemoteState,
   saveRemoteState,
+  syncPublishedWorkspaceSnapshot,
   type SupabaseSession,
   type SupabaseUser,
 } from './supabaseRest';
@@ -82,6 +83,9 @@ export function useRemoteSync(
         try {
           setStatus('saving');
           await saveRemoteState(user.id, workspaceId, workspaceName, payloadState, session);
+          await syncPublishedWorkspaceSnapshot(user.id, workspaceId, workspaceName, payloadState, session).catch(
+            () => undefined
+          );
           lastSaved = payloadString;
           setStatus('idle');
         } catch {

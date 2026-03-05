@@ -438,6 +438,32 @@ export async function unpublishWorkspaceSlug(
   }
 }
 
+export async function syncPublishedWorkspaceSnapshot(
+  userId: string,
+  workspaceId: string,
+  workspaceName: string,
+  state: PersistedGameState,
+  session: SupabaseSession
+): Promise<void> {
+  const query = new URL(`${getSupabaseUrl()}/rest/v1/published_workspaces`);
+  query.searchParams.set('user_id', `eq.${userId}`);
+  query.searchParams.set('workspace_id', `eq.${workspaceId}`);
+
+  const res = await fetch(query.toString(), {
+    method: 'PATCH',
+    headers: restHeaders(session),
+    body: JSON.stringify({
+      workspace_name: workspaceName,
+      state,
+      updated_at: new Date().toISOString(),
+    }),
+  });
+
+  if (!res.ok) {
+    throw new Error('Failed to sync published workspace');
+  }
+}
+
 export async function loadPublishedWorkspace(slug: string): Promise<PublishedWorkspace | null> {
   const query = new URL(`${getSupabaseUrl()}/rest/v1/published_workspaces`);
   query.searchParams.set('select', 'slug,workspace_id,workspace_name,state,updated_at');
