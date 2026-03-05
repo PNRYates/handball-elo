@@ -372,7 +372,6 @@ export default function App() {
               slug={publicSlug}
               workspaceName={publicWorkspaceName}
               updatedAt={publicUpdatedAt}
-              state={sanitizePersistedGameState(getPersistedGameState(useGameStore.getState()))}
             />
           )}
         </div>

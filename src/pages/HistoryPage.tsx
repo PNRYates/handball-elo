@@ -58,7 +58,11 @@ function TurnItem({ turn, players }: { turn: Turn; players: Record<string, { nam
   );
 }
 
-export default function HistoryPage() {
+interface HistoryPageProps {
+  readOnly?: boolean;
+}
+
+export default function HistoryPage({ readOnly = false }: HistoryPageProps) {
   const turns = useGameStore((s) => selectActiveWorkspace(s).turns);
   const players = useGameStore((s) => selectActiveWorkspace(s).players);
   const gameHistory = useGameStore((s) => selectActiveWorkspace(s).gameHistory);
@@ -147,7 +151,7 @@ export default function HistoryPage() {
                   </summary>
                   <div className="mt-2 space-y-2 pl-2 border-l border-gray-800">
                     <div>
-                      {editingGameId === game.id ? (
+                      {!readOnly && editingGameId === game.id ? (
                         <input
                           autoFocus
                           value={draftGameName}
@@ -167,30 +171,34 @@ export default function HistoryPage() {
                           placeholder={`Game #${game.id}`}
                         />
                       ) : (
-                        <button
-                          type="button"
-                          onClick={() => startEditGameName(game.id, game.name)}
-                          className="text-xs text-gray-500 hover:text-amber-400 transition-colors"
-                        >
-                          {game.name ? 'Rename Game' : 'Name Game'}
-                        </button>
+                        !readOnly && (
+                          <button
+                            type="button"
+                            onClick={() => startEditGameName(game.id, game.name)}
+                            className="text-xs text-gray-500 hover:text-amber-400 transition-colors"
+                          >
+                            {game.name ? 'Rename Game' : 'Name Game'}
+                          </button>
+                        )
                       )}
                     </div>
                     {game.turns.map((turn) => (
                       <TurnItem key={turn.turnNumber} turn={turn} players={players} />
                     ))}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const label = game.name || `Game #${game.id}`;
-                        if (window.confirm(`Delete ${label} from history?`)) {
-                          deleteGameFromHistory(game.id);
-                        }
-                      }}
-                      className="text-xs text-gray-500 hover:text-red-400 transition-colors mt-2"
-                    >
-                      Delete Game
-                    </button>
+                    {!readOnly && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const label = game.name || `Game #${game.id}`;
+                          if (window.confirm(`Delete ${label} from history?`)) {
+                            deleteGameFromHistory(game.id);
+                          }
+                        }}
+                        className="text-xs text-gray-500 hover:text-red-400 transition-colors mt-2"
+                      >
+                        Delete Game
+                      </button>
+                    )}
                   </div>
                 </details>
               );

@@ -1,16 +1,35 @@
-import type { PersistedGameState } from '../store/gameStore';
+import { Link, useLocation } from 'react-router-dom';
+import LeaderboardPage from './LeaderboardPage';
+import HistoryPage from './HistoryPage';
+import AnalysisPage from './AnalysisPage';
 
 interface PublicWorkspacePageProps {
   slug: string;
   workspaceName: string;
   updatedAt: string;
-  state: PersistedGameState;
 }
 
-export default function PublicWorkspacePage({ slug, workspaceName, updatedAt, state }: PublicWorkspacePageProps) {
-  const workspace = state.workspaces[state.activeWorkspaceId];
-  const players = Object.values(workspace?.players ?? {}).sort((a, b) => b.elo - a.elo);
-  const court = workspace?.court ?? ['', '', '', ''];
+const PUBLIC_VIEWS = [
+  { key: 'leaderboard', label: 'Leaderboard' },
+  { key: 'history', label: 'History' },
+  { key: 'analysis', label: 'Analysis' },
+] as const;
+
+function resolveActiveView(pathname: string, slug: string): (typeof PUBLIC_VIEWS)[number]['key'] {
+  const parts = pathname.split('/').filter(Boolean);
+  const maybeView = parts[2];
+  if (parts[0] !== 'public' || parts[1] !== slug) {
+    return 'leaderboard';
+  }
+  if (maybeView === 'history' || maybeView === 'analysis' || maybeView === 'leaderboard') {
+    return maybeView;
+  }
+  return 'leaderboard';
+}
+
+export default function PublicWorkspacePage({ slug, workspaceName, updatedAt }: PublicWorkspacePageProps) {
+  const location = useLocation();
+  const activeView = resolveActiveView(location.pathname, slug);
 
   return (
     <div className="space-y-4">
@@ -20,29 +39,25 @@ export default function PublicWorkspacePage({ slug, workspaceName, updatedAt, st
         {new Date(updatedAt).toLocaleString()}
       </p>
 
-      <section className="bg-gray-800 border border-gray-700 rounded-lg p-4">
-        <h2 className="font-medium mb-2">Court</h2>
-        <div className="grid grid-cols-2 gap-2 text-sm">
-          {court.map((playerId, index) => (
-            <div key={`slot-${index}`} className="rounded border border-gray-700 bg-gray-900 px-3 py-2">
-              <p className="text-xs text-gray-500">Position {index + 1}</p>
-              <p className="text-gray-100">{playerId ? workspace?.players[playerId]?.name ?? 'Unknown' : 'Empty'}</p>
-            </div>
-          ))}
-        </div>
-      </section>
+      <div className="flex flex-wrap gap-2 border-b border-gray-800 pb-3">
+        {PUBLIC_VIEWS.map((view) => (
+          <Link
+            key={view.key}
+            to={`/public/${slug}/${view.key}`}
+            className={`px-3 py-1.5 text-sm rounded-lg border transition-colors ${
+              activeView === view.key
+                ? 'bg-amber-600 border-amber-500 text-white'
+                : 'bg-gray-900 border-gray-700 text-gray-300 hover:border-gray-600'
+            }`}
+          >
+            {view.label}
+          </Link>
+        ))}
+      </div>
 
-      <section className="bg-gray-800 border border-gray-700 rounded-lg p-4">
-        <h2 className="font-medium mb-2">Leaderboard</h2>
-        <div className="space-y-2 text-sm">
-          {players.map((player, index) => (
-            <div key={player.id} className="flex items-center justify-between rounded border border-gray-700 bg-gray-900 px-3 py-2">
-              <p className="text-gray-100">#{index + 1} {player.name}</p>
-              <p className="text-amber-400 font-medium">{Math.round(player.elo)}</p>
-            </div>
-          ))}
-        </div>
-      </section>
+      {activeView === 'leaderboard' && <LeaderboardPage readOnly />}
+      {activeView === 'history' && <HistoryPage readOnly />}
+      {activeView === 'analysis' && <AnalysisPage />}
     </div>
   );
 }
