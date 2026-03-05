@@ -2,7 +2,11 @@ import { useState, useRef, useEffect } from 'react';
 import { selectActiveWorkspace, useGameStore } from '../store/gameStore';
 import { formatRating } from '../lib/rating';
 
-export default function LeaderboardPage() {
+interface LeaderboardPageProps {
+  readOnly?: boolean;
+}
+
+export default function LeaderboardPage({ readOnly = false }: LeaderboardPageProps) {
   const players = useGameStore((s) => selectActiveWorkspace(s).players);
   const renamePlayer = useGameStore((s) => s.renamePlayer);
   const hidePlayer = useGameStore((s) => s.hidePlayer);
@@ -53,7 +57,7 @@ export default function LeaderboardPage() {
   return (
     <div>
       <h1 className="text-lg font-bold mb-1">Leaderboard</h1>
-      <p className="text-xs text-gray-600 mb-4">Click a name to rename</p>
+      <p className="text-xs text-gray-600 mb-4">{readOnly ? 'Read-only snapshot' : 'Click a name to rename'}</p>
       <div className="space-y-2">
         {sorted.map((player, i) => (
           <div
@@ -64,7 +68,7 @@ export default function LeaderboardPage() {
               #{i + 1}
             </span>
             <div className="flex-1 min-w-0">
-              {editingId === player.id ? (
+              {!readOnly && editingId === player.id ? (
                 <input
                   ref={editRef}
                   type="text"
@@ -85,8 +89,14 @@ export default function LeaderboardPage() {
                 />
               ) : (
                 <div
-                  onClick={() => startEdit(player.id, player.name)}
-                  className="font-medium truncate cursor-pointer hover:text-amber-400 transition-colors"
+                  onClick={() => {
+                    if (!readOnly) {
+                      startEdit(player.id, player.name);
+                    }
+                  }}
+                  className={`font-medium truncate transition-colors ${
+                    readOnly ? 'cursor-default' : 'cursor-pointer hover:text-amber-400'
+                  }`}
                 >
                   {player.name}
                 </div>
@@ -98,14 +108,16 @@ export default function LeaderboardPage() {
             </div>
             <div className="text-right shrink-0 ml-3 flex items-center gap-2">
               <div className="font-mono font-bold text-lg">{formatRating(player.elo)}</div>
-              <button
-                type="button"
-                onClick={() => hidePlayer(player.id)}
-                className="text-xs px-2 py-1 rounded border border-gray-600 text-gray-300 hover:border-red-500 hover:text-red-300"
-                title="Delete name"
-              >
-                Delete
-              </button>
+              {!readOnly && (
+                <button
+                  type="button"
+                  onClick={() => hidePlayer(player.id)}
+                  className="text-xs px-2 py-1 rounded border border-gray-600 text-gray-300 hover:border-red-500 hover:text-red-300"
+                  title="Delete name"
+                >
+                  Delete
+                </button>
+              )}
             </div>
           </div>
         ))}
