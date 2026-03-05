@@ -37,6 +37,43 @@ create policy "Users can delete own game state"
   to authenticated
   using (auth.uid() = user_id);
 
+create table if not exists public.published_workspaces (
+  slug text primary key,
+  user_id uuid not null references auth.users (id) on delete cascade,
+  workspace_id text not null,
+  workspace_name text not null,
+  state jsonb not null,
+  updated_at timestamptz not null default now(),
+  unique (user_id, workspace_id)
+);
+
+alter table public.published_workspaces enable row level security;
+
+create policy "Anyone can read published workspaces"
+  on public.published_workspaces
+  for select
+  to anon, authenticated
+  using (true);
+
+create policy "Users can publish own workspaces"
+  on public.published_workspaces
+  for insert
+  to authenticated
+  with check (auth.uid() = user_id);
+
+create policy "Users can update own published workspaces"
+  on public.published_workspaces
+  for update
+  to authenticated
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
+create policy "Users can delete own published workspaces"
+  on public.published_workspaces
+  for delete
+  to authenticated
+  using (auth.uid() = user_id);
+
 -- ─────────────────────────────────────────────────────────────────────────────
 -- MIGRATION — run this block if upgrading an existing install (not fresh setup)
 -- ─────────────────────────────────────────────────────────────────────────────

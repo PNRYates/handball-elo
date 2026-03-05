@@ -16,6 +16,14 @@ export interface SupabaseUser {
   email?: string;
 }
 
+export interface PublishedWorkspace {
+  slug: string;
+  workspaceId: string;
+  workspaceName: string;
+  state: PersistedGameState;
+  updatedAt: string;
+}
+
 function getEnv(name: string): string {
   const value = import.meta.env[name as keyof ImportMetaEnv];
   if (typeof value !== 'string' || value.length === 0) {
@@ -204,6 +212,13 @@ function restHeaders(session: SupabaseSession): HeadersInit {
   };
 }
 
+function publicRestHeaders(): HeadersInit {
+  return {
+    apikey: getSupabaseAnonKey(),
+    'Content-Type': 'application/json',
+  };
+}
+
 export async function loadRemoteState(
   userId: string,
   workspaceId: string,
@@ -353,4 +368,108 @@ export async function renameWorkspace(
   if (!res.ok) {
     throw new Error('Failed to rename workspace');
   }
+}
+
+export async function getPublishedSlugForWorkspace(
+  userId: string,
+  workspaceId: string,
+  session: SupabaseSession
+): Promise<string | null> {
+  const query = new URL(`${getSupabaseUrl()}/rest/v1/published_workspaces`);
+  query.searchParams.set('select', 'slug');
+  query.searchParams.set('user_id', `eq.${userId}`);
+  query.searchParams.set('workspace_id', `eq.${workspaceId}`);
+  query.searchParams.set('limit', '1');
+
+  const res = await fetch(query.toString(), { headers: restHeaders(session) });
+  if (!res.ok) {
+    throw new Error('Failed to load published slug');
+  }
+
+  const rows = (await res.json()) as Array<{ slug?: string }>;
+  return rows[0]?.slug ?? null;
+}
+
+export async function claimWorkspaceSlug(
+  userId: string,
+  workspaceId: string,
+  workspaceName: string,
+  slug: string,
+  state: PersistedGameState,
+  session: SupabaseSession
+): Promise<void> {
+  const res = await fetch(`${getSupabaseUrl()}/rest/v1/published_workspaces`, {
+    method: 'POST',
+    headers: {
+      ...restHeaders(session),
+      Prefer: 'resolution=merge-duplicates,return=minimal',
+    },
+    body: JSON.stringify({
+      slug,
+      user_id: userId,
+      workspace_id: workspaceId,
+      workspace_name: workspaceName,
+      state,
+      updated_at: new Date().toISOString(),
+    }),
+  });
+
+  if (!res.ok) {
+    throw new Error('Failed to claim slug');
+  }
+}
+
+export async function unpublishWorkspaceSlug(
+  userId: string,
+  workspaceId: string,
+  session: SupabaseSession
+): Promise<void> {
+  const query = new URL(`${getSupabaseUrl()}/rest/v1/published_workspaces`);
+  query.searchParams.set('user_id', `eq.${userId}`);
+  query.searchParams.set('workspace_id', `eq.${workspaceId}`);
+
+  const res = await fetch(query.toString(), {
+    method: 'DELETE',
+    headers: restHeaders(session),
+  });
+
+  if (!res.ok) {
+    throw new Error('Failed to unpublish workspace');
+  }
+}
+
+export async function loadPublishedWorkspace(slug: string): Promise<PublishedWorkspace | null> {
+  const query = new URL(`${getSupabaseUrl()}/rest/v1/published_workspaces`);
+  query.searchParams.set('select', 'slug,workspace_id,workspace_name,state,updated_at');
+  query.searchParams.set('slug', `eq.${slug}`);
+  query.searchParams.set('limit', '1');
+
+  const res = await fetch(query.toString(), {
+    headers: publicRestHeaders(),
+  });
+
+  if (!res.ok) {
+    throw new Error('Failed to load published workspace');
+  }
+
+  const rows = (await res.json()) as Array<{
+    slug: string;
+    workspace_id: string;
+    workspace_name: string;
+    state: PersistedGameState;
+    updated_at: string;
+  }>;
+
+  if (rows.length === 0) {
+    return null;
+  }
+
+  const row = rows[0];
+  return {
+    slug: row.slug,
+    workspaceId: row.workspace_id,
+    workspaceName: row.workspace_name,
+    state: row.state,
+    updatedAt: row.updated_at,
+  };
 }

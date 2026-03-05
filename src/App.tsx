@@ -7,20 +7,30 @@ import HistoryPage from './pages/HistoryPage';
 import SettingsPage from './pages/SettingsPage';
 import InstructionsPage from './pages/InstructionsPage';
 import AnalysisPage from './pages/AnalysisPage';
+import PublicWorkspacePage from './pages/PublicWorkspacePage';
 import {
+  claimWorkspaceSlug,
   getCurrentSession,
   getCurrentUser,
+  getPublishedSlugForWorkspace,
   loginWithGoogle,
+  loadPublishedWorkspace,
   logout,
   listWorkspaces,
   createWorkspace,
   deleteWorkspace,
   renameWorkspace,
+  unpublishWorkspaceSlug,
   type SupabaseSession,
   type SupabaseUser,
 } from './lib/supabaseRest';
 import { useRemoteSync } from './lib/useRemoteSync';
-import { useGameStore, selectActiveWorkspace, sanitizePersistedGameState } from './store/gameStore';
+import {
+  getPersistedGameState,
+  useGameStore,
+  selectActiveWorkspace,
+  sanitizePersistedGameState,
+} from './store/gameStore';
 import { buildSampleState } from './lib/sampleData';
 import type { Workspace } from './types';
 
@@ -28,6 +38,7 @@ const SAMPLE_MODE_KEY = 'handball-elo-sample-mode';
 const WORKSPACE_ID_KEY = 'handball-elo-workspace-id';
 const DEFAULT_WORKSPACE_ID = 'default';
 const DEFAULT_WORKSPACE_NAME = 'Default';
+const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 function generateWorkspaceId(): string {
   return `ws_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
@@ -73,9 +84,18 @@ export default function App() {
     () => localStorage.getItem(WORKSPACE_ID_KEY) ?? DEFAULT_WORKSPACE_ID
   );
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
+  const [publishedSlug, setPublishedSlug] = useState<string | null>(null);
+  const [publishStatus, setPublishStatus] = useState<string | null>(null);
+  const [publicLoading, setPublicLoading] = useState(false);
+  const [publicError, setPublicError] = useState<string | null>(null);
+  const [publicWorkspaceName, setPublicWorkspaceName] = useState<string>('');
+  const [publicUpdatedAt, setPublicUpdatedAt] = useState<string>('');
 
   const activeWorkspaceName =
     workspaces.find((w) => w.id === activeWorkspaceId)?.name ?? DEFAULT_WORKSPACE_NAME;
+  const publicSlug = location.pathname.startsWith('/public/')
+    ? location.pathname.replace('/public/', '').split('/')[0]
+    : null;
 
   const enterSampleMode = useCallback(async () => {
     if (session) {
@@ -163,16 +183,104 @@ export default function App() {
   }, [hydrateFromRemote, sampleMode]);
 
   useEffect(() => {
-    void bootAuth();
-  }, [bootAuth]);
+    if (!publicSlug) return;
+    let active = true;
+    setPublicLoading(true);
+    setPublicError(null);
+
+    void (async () => {
+      try {
+        const published = await loadPublishedWorkspace(publicSlug);
+        if (!active) return;
+        if (!published) {
+          setPublicError('This public workspace was not found.');
+          return;
+        }
+        hydrateFromRemote(sanitizePersistedGameState(published.state));
+        setPublicWorkspaceName(published.workspaceName);
+        setPublicUpdatedAt(published.updatedAt);
+      } catch {
+        if (!active) return;
+        setPublicError('Failed to load public workspace.');
+      } finally {
+        if (active) setPublicLoading(false);
+      }
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [publicSlug, hydrateFromRemote]);
 
   useEffect(() => {
+    if (publicSlug) return;
+    void bootAuth();
+  }, [bootAuth, publicSlug]);
+
+  useEffect(() => {
+    if (!user || !session) {
+      setPublishedSlug(null);
+      return;
+    }
+    let active = true;
+    void (async () => {
+      try {
+        const slug = await getPublishedSlugForWorkspace(user.id, activeWorkspaceId, session);
+        if (active) {
+          setPublishedSlug(slug);
+        }
+      } catch {
+        if (active) {
+          setPublishedSlug(null);
+        }
+      }
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [user, session, activeWorkspaceId]);
+
+  useEffect(() => {
+    if (publicSlug) return;
     if (sampleMode || !user || workspaces.length > 0) return;
     const now = new Date().toISOString();
     setWorkspaces([{ id: DEFAULT_WORKSPACE_ID, name: DEFAULT_WORKSPACE_NAME, updatedAt: now }]);
     setActiveWorkspaceId(DEFAULT_WORKSPACE_ID);
     localStorage.setItem(WORKSPACE_ID_KEY, DEFAULT_WORKSPACE_ID);
-  }, [sampleMode, user, workspaces.length]);
+  }, [publicSlug, sampleMode, user, workspaces.length]);
+
+  const handleClaimSlug = useCallback(
+    async (slug: string) => {
+      if (!user || !session) return;
+      const normalized = slug.trim().toLowerCase();
+      if (!SLUG_PATTERN.test(normalized)) {
+        setPublishStatus('Slug must contain lowercase letters, numbers, and hyphens only.');
+        return;
+      }
+
+      try {
+        const payload = sanitizePersistedGameState(getPersistedGameState(useGameStore.getState()));
+        await claimWorkspaceSlug(user.id, activeWorkspaceId, activeWorkspaceName, normalized, payload, session);
+        setPublishedSlug(normalized);
+        setPublishStatus('Workspace published successfully.');
+      } catch {
+        setPublishStatus('Failed to claim slug. It may already be taken.');
+      }
+    },
+    [user, session, activeWorkspaceId, activeWorkspaceName]
+  );
+
+  const handleUnpublishSlug = useCallback(async () => {
+    if (!user || !session) return;
+    try {
+      await unpublishWorkspaceSlug(user.id, activeWorkspaceId, session);
+      setPublishedSlug(null);
+      setPublishStatus('Workspace is no longer public.');
+    } catch {
+      setPublishStatus('Failed to unpublish workspace.');
+    }
+  }, [user, session, activeWorkspaceId]);
 
   const handleSwitchWorkspace = useCallback((id: string) => {
     setActiveWorkspaceId(id);
@@ -251,6 +359,27 @@ export default function App() {
     document.documentElement.setAttribute('data-theme', theme);
   }, [theme]);
 
+  if (publicSlug) {
+    return (
+      <div className="min-h-screen bg-gray-950 text-gray-100 px-4 py-6">
+        <div className="max-w-xl mx-auto">
+          {publicLoading ? (
+            <p className="text-sm text-gray-400">Loading published workspace…</p>
+          ) : publicError ? (
+            <p className="text-sm text-red-400">{publicError}</p>
+          ) : (
+            <PublicWorkspacePage
+              slug={publicSlug}
+              workspaceName={publicWorkspaceName}
+              updatedAt={publicUpdatedAt}
+              state={sanitizePersistedGameState(getPersistedGameState(useGameStore.getState()))}
+            />
+          )}
+        </div>
+      </div>
+    );
+  }
+
   if (authLoading && !sampleMode) {
     return <LoginView error={null} onUseSample={() => void enterSampleMode()} />;
   }
@@ -313,6 +442,10 @@ export default function App() {
                 onCreateWorkspace={sampleMode ? undefined : (name) => void handleCreateWorkspace(name ?? '')}
                 onRenameWorkspace={sampleMode ? undefined : (id, name) => void handleRenameWorkspace(id, name)}
                 onDeleteWorkspace={sampleMode ? undefined : (id) => void handleDeleteWorkspace(id)}
+                publishedSlug={publishedSlug}
+                publishStatus={publishStatus}
+                onClaimSlug={sampleMode ? undefined : (slug) => void handleClaimSlug(slug)}
+                onUnpublishSlug={sampleMode ? undefined : () => void handleUnpublishSlug()}
               />
             }
           />
