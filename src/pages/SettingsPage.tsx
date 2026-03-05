@@ -7,7 +7,7 @@ interface SettingsPageProps {
 
 export default function SettingsPage({ onLoadSampleData }: SettingsPageProps) {
   const workspace = useGameStore((s) => selectActiveWorkspace(s));
-  const workspaces = useGameStore((s) => Object.values(s.workspaces));
+  const workspaceMap = useGameStore((s) => s.workspaces);
   const activeWorkspaceId = useGameStore((s) => s.activeWorkspaceId);
   const setTheme = useGameStore((s) => s.setTheme);
   const setRequireKiller = useGameStore((s) => s.setRequireKiller);
@@ -16,6 +16,8 @@ export default function SettingsPage({ onLoadSampleData }: SettingsPageProps) {
   const renameWorkspace = useGameStore((s) => s.renameWorkspace);
   const deleteWorkspace = useGameStore((s) => s.deleteWorkspace);
   const switchWorkspace = useGameStore((s) => s.switchWorkspace);
+
+  const workspaces = useMemo(() => Object.values(workspaceMap), [workspaceMap]);
 
   const [newWorkspaceName, setNewWorkspaceName] = useState('');
   const [renameDraft, setRenameDraft] = useState(() => workspace.name);
