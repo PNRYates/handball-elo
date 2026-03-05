@@ -58,7 +58,19 @@ export default function SettingsPage({
     setSlugDraft(publishedSlug ?? '');
   }, [publishedSlug, effectiveActiveWorkspaceId]);
 
-  const publicUrl = slugDraft ? `${window.location.origin}/handball-elo/public/${slugDraft}` : null;
+  const publicUrl = useMemo(() => {
+    if (!slugDraft) return null;
+    const basePath = import.meta.env.BASE_URL ?? '/';
+    const normalizedBase = basePath.endsWith('/') ? basePath : `${basePath}/`;
+    const useHashRouter = import.meta.env.VITE_USE_HASH_ROUTER === 'true';
+
+    if (useHashRouter) {
+      const base = `${window.location.origin}${normalizedBase}`.replace(/\/$/, '');
+      return `${base}/#/public/${slugDraft}`;
+    }
+
+    return `${window.location.origin}${normalizedBase}public/${slugDraft}`;
+  }, [slugDraft]);
 
   const sortedWorkspaces = useMemo(
     () => [...effectiveWorkspaces].sort((a, b) => a.sortKey - b.sortKey),
