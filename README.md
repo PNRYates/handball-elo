@@ -9,6 +9,7 @@ A React + TypeScript web app for tracking handball rotations, Elo changes, and l
   - Killer required
   - No-killer mode (eliminated player's loss split across survivors)
 - Stores full game state per user in Supabase (Postgres)
+- Publish a workspace snapshot to a permanent slug URL (`/public/<slug>`)
 - Authenticates users with Google OAuth
 - Provides analytics dashboard for:
   - Performance trends
@@ -117,6 +118,7 @@ Stores:
 
 State is saved server-side per authenticated user in Supabase table:
 - `public.user_game_state`
+- `public.published_workspaces` (public snapshots by slug)
 
 Sync behavior:
 - Auth boot resolves session/user

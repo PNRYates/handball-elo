@@ -10,6 +10,10 @@ interface SettingsPageProps {
   onCreateWorkspace?: (name?: string) => void;
   onRenameWorkspace?: (id: string, name: string) => void;
   onDeleteWorkspace?: (id: string) => void;
+  publishedSlug?: string | null;
+  publishStatus?: string | null;
+  onClaimSlug?: (slug: string) => void;
+  onUnpublishSlug?: () => void;
 }
 
 export default function SettingsPage({
@@ -20,6 +24,10 @@ export default function SettingsPage({
   onCreateWorkspace,
   onRenameWorkspace,
   onDeleteWorkspace,
+  publishedSlug,
+  publishStatus,
+  onClaimSlug,
+  onUnpublishSlug,
 }: SettingsPageProps) {
   const workspace = useGameStore((s) => selectActiveWorkspace(s));
   const setTheme = useGameStore((s) => s.setTheme);
@@ -37,6 +45,7 @@ export default function SettingsPage({
   );
 
   const [newWorkspaceName, setNewWorkspaceName] = useState('');
+  const [slugDraft, setSlugDraft] = useState('');
   const activeWorkspaceName =
     effectiveWorkspaces.find((item) => item.id === effectiveActiveWorkspaceId)?.name ?? workspace.name;
   const [renameDraft, setRenameDraft] = useState(activeWorkspaceName);
@@ -44,6 +53,12 @@ export default function SettingsPage({
   useEffect(() => {
     setRenameDraft(activeWorkspaceName);
   }, [activeWorkspaceName]);
+
+  useEffect(() => {
+    setSlugDraft(publishedSlug ?? '');
+  }, [publishedSlug, effectiveActiveWorkspaceId]);
+
+  const publicUrl = slugDraft ? `${window.location.origin}/handball-elo/public/${slugDraft}` : null;
 
   const sortedWorkspaces = useMemo(
     () => [...effectiveWorkspaces].sort((a, b) => a.sortKey - b.sortKey),
@@ -137,6 +152,45 @@ export default function SettingsPage({
             Delete active
           </button>
         </div>
+      </section>
+
+      <section className="bg-gray-800 border border-gray-700 rounded-lg p-4 space-y-3">
+        <div>
+          <h2 className="font-medium">Publish workspace</h2>
+          <p className="text-xs text-gray-500 mt-0.5">
+            Claim a permanent slug and publish a snapshot of this workspace to a public URL.
+          </p>
+        </div>
+        <div className="grid gap-2 sm:grid-cols-[1fr_auto_auto]">
+          <input
+            type="text"
+            value={slugDraft}
+            onChange={(e) => setSlugDraft(e.target.value.toLowerCase())}
+            placeholder="your-slug"
+            className="bg-gray-900 border border-gray-700 rounded px-3 py-2 text-sm"
+          />
+          <button
+            type="button"
+            onClick={() => onClaimSlug?.(slugDraft.trim())}
+            className="px-3 py-2 rounded border text-sm bg-gray-900 border-gray-700 text-gray-300 hover:border-gray-500 transition-colors"
+          >
+            Claim slug
+          </button>
+          <button
+            type="button"
+            onClick={() => onUnpublishSlug?.()}
+            disabled={!publishedSlug}
+            className="px-3 py-2 rounded border text-sm bg-gray-900 border-red-900 text-red-300 hover:border-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Unpublish
+          </button>
+        </div>
+        {publicUrl && (
+          <p className="text-xs text-amber-400 break-all">
+            Public URL: <a className="underline" href={publicUrl}>{publicUrl}</a>
+          </p>
+        )}
+        {publishStatus && <p className="text-xs text-gray-400">{publishStatus}</p>}
       </section>
 
       <section className="bg-gray-800 border border-gray-700 rounded-lg p-4 space-y-3">
