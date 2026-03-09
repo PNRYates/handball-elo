@@ -144,15 +144,9 @@ function getTableMaxHeight(limit: number): number {
 
 type FormSortKey = 'playerName' | 'netElo10' | 'netElo20' | 'killRate10' | 'momentum10' | 'volatility' | 'avgDelta';
 type FormSortDirection = 'asc' | 'desc';
+type H2hSortKey = 'matchup' | 'turnsTogether' | 'kills' | 'killRatioA' | 'netEloAminusB';
+type H2hSortDirection = 'asc' | 'desc';
 
-
-function Th({ label, help }: { label: string; help: string }) {
-  return (
-    <th className="py-1.5 pr-2">
-      <InlineExplain label={label} text={help} />
-    </th>
-  );
-}
 
 function LineChartCard({
   title,
@@ -378,6 +372,10 @@ export default function AnalysisPage() {
     key: 'netElo10',
     direction: 'desc',
   });
+  const [h2hTableSort, setH2hTableSort] = useState<{ key: H2hSortKey; direction: H2hSortDirection }>({
+    key: 'turnsTogether',
+    direction: 'desc',
+  });
   const turns = workspace.turns;
   const gameHistory = workspace.gameHistory;
   const players = workspace.players;
@@ -414,7 +412,39 @@ export default function AnalysisPage() {
     return sortedH2h.filter((row) => selected.has(row.playerAId) || selected.has(row.playerBId));
   }, [sortedH2h, h2hPlayers]);
 
-  const top = topRivalries(filteredH2h, 8);
+  const sortedH2hTableRows = useMemo(() => {
+    const rows = [...filteredH2h];
+    rows.sort((a, b) => {
+      const direction = h2hTableSort.direction === 'asc' ? 1 : -1;
+      if (h2hTableSort.key === 'matchup') {
+        const left = `${a.playerAName} vs ${a.playerBName}`;
+        const right = `${b.playerAName} vs ${b.playerBName}`;
+        return left.localeCompare(right) * direction;
+      }
+      if (h2hTableSort.key === 'kills') {
+        const left = a.killsAonB + a.killsBonA;
+        const right = b.killsAonB + b.killsBonA;
+        return (left - right) * direction;
+      }
+      return (a[h2hTableSort.key] - b[h2hTableSort.key]) * direction;
+    });
+    return rows;
+  }, [filteredH2h, h2hTableSort]);
+
+  const toggleH2hTableSort = (key: H2hSortKey) => {
+    setH2hTableSort((current) =>
+      current.key === key
+        ? { key, direction: current.direction === 'asc' ? 'desc' : 'asc' }
+        : { key, direction: key === 'matchup' ? 'asc' : 'desc' }
+    );
+  };
+
+  const h2hSortArrow = (key: H2hSortKey) => {
+    if (h2hTableSort.key !== key) return '↕';
+    return h2hTableSort.direction === 'asc' ? '↑' : '↓';
+  };
+
+  const top = topRivalries(sortedH2hTableRows, 8);
 
   const volatilityById = useMemo(() => {
     const map = new Map<string, { volatility: number; averageDelta: number }>();
@@ -726,19 +756,19 @@ export default function AnalysisPage() {
             </label>
           </div>
 
-          <div className={`overflow-x-auto ${filteredH2h.length > h2hRowsVisible ? 'overflow-y-auto' : ''}`} style={filteredH2h.length > h2hRowsVisible ? { maxHeight: getTableMaxHeight(h2hRowsVisible) } : undefined}>
+          <div className={`overflow-x-auto ${sortedH2hTableRows.length > h2hRowsVisible ? 'overflow-y-auto' : ''}`} style={sortedH2hTableRows.length > h2hRowsVisible ? { maxHeight: getTableMaxHeight(h2hRowsVisible) } : undefined}>
             <table className="w-full text-sm">
               <thead className="sticky top-0 bg-gray-800">
                 <tr className="text-left text-gray-500 border-b border-gray-700">
-                  <Th label="Matchup" help="Player pair compared in this head-to-head row." />
-                  <Th label="Turns" help="How many turns both players shared court time." />
-                  <Th label="Kills A-B" help="Direct eliminations: player A on player B and vice versa." />
-                  <Th label="Kill Ratio A" help="Kills by player A divided by kills by player B (smoothed when denominator is zero)." />
-                  <Th label="Net Elo A-B" help="Net Elo differential between A and B during shared turns." />
+                  <th className="py-1.5 pr-2"><div className="inline-flex items-center gap-1"><InlineExplain label="Matchup" text="Player pair compared in this head-to-head row." /><button type="button" className="text-xs text-gray-400 hover:text-gray-200" onClick={() => toggleH2hTableSort('matchup')} aria-label="Sort by matchup">{h2hSortArrow('matchup')}</button></div></th>
+                  <th className="py-1.5 pr-2"><div className="inline-flex items-center gap-1"><InlineExplain label="Turns" text="How many turns both players shared court time." /><button type="button" className="text-xs text-gray-400 hover:text-gray-200" onClick={() => toggleH2hTableSort('turnsTogether')} aria-label="Sort by turns">{h2hSortArrow('turnsTogether')}</button></div></th>
+                  <th className="py-1.5 pr-2"><div className="inline-flex items-center gap-1"><InlineExplain label="Kills A-B" text="Direct eliminations: player A on player B and vice versa." /><button type="button" className="text-xs text-gray-400 hover:text-gray-200" onClick={() => toggleH2hTableSort('kills')} aria-label="Sort by kills">{h2hSortArrow('kills')}</button></div></th>
+                  <th className="py-1.5 pr-2"><div className="inline-flex items-center gap-1"><InlineExplain label="Kill Ratio A" text="Kills by player A divided by kills by player B (smoothed when denominator is zero)." /><button type="button" className="text-xs text-gray-400 hover:text-gray-200" onClick={() => toggleH2hTableSort('killRatioA')} aria-label="Sort by kill ratio">{h2hSortArrow('killRatioA')}</button></div></th>
+                  <th className="py-1.5 pr-2"><div className="inline-flex items-center gap-1"><InlineExplain label="Net Elo A-B" text="Net Elo differential between A and B during shared turns." /><button type="button" className="text-xs text-gray-400 hover:text-gray-200" onClick={() => toggleH2hTableSort('netEloAminusB')} aria-label="Sort by net elo">{h2hSortArrow('netEloAminusB')}</button></div></th>
                 </tr>
               </thead>
               <tbody>
-                {filteredH2h.map((row: HeadToHeadRow) => (
+                {sortedH2hTableRows.map((row: HeadToHeadRow) => (
                   <tr key={row.pairKey} className="border-b border-gray-800 last:border-b-0">
                     <td className="py-1.5 pr-2">{row.playerAName} vs {row.playerBName}</td>
                     <td className="py-1.5 pr-2 font-mono">{row.turnsTogether}</td>
