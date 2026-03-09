@@ -381,6 +381,7 @@ export default function AnalysisPage() {
   const players = workspace.players;
   const filter = workspace.analytics.filter;
   const selectedPlayers = workspace.analytics.selectedPlayers;
+  const selectedPlayersUseDefault = workspace.analytics.selectedPlayersUseDefault;
   const h2hSort = workspace.analytics.h2hSort;
   const h2hPlayers = workspace.analytics.h2hPlayers;
   const trendWindow = workspace.analytics.trendWindow;
@@ -389,7 +390,7 @@ export default function AnalysisPage() {
 
   const filtered = useMemo(() => getFilteredTurns(turns, gameHistory, filter), [turns, gameHistory, filter]);
   const defaultPlayers = useMemo(() => defaultSelectedPlayers(filtered), [filtered]);
-  const effectiveSelectedPlayers = selectedPlayers.length > 0 ? selectedPlayers : defaultPlayers;
+  const effectiveSelectedPlayers = selectedPlayersUseDefault ? defaultPlayers : selectedPlayers;
   const allPlayerIdsByElo = useMemo(() => Object.values(players).sort((a, b) => b.elo - a.elo).map((p) => p.id), [players]);
   const allPlayerIdsByName = useMemo(() => Object.values(players).sort((a, b) => a.name.localeCompare(b.name)).map((p) => p.id), [players]);
 
@@ -611,16 +612,20 @@ export default function AnalysisPage() {
       </section>
 
       <section className="bg-gray-800 border border-gray-700 rounded-lg p-4 space-y-3">
-        <h2 className="font-medium">
-          <InlineExplain label="Selected Players" text="Select which players appear in the Performance Trends chart. Defaults to most active players." />
-        </h2>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="font-medium">
+            <InlineExplain label="Selected Players" text="Select which players appear in the Performance Trends chart. Defaults to most active players." />
+          </h2>
+          <div className="flex items-center gap-2">
+            <button type="button" onClick={() => setSelectedPlayers([...allPlayerIdsByElo])} className="text-xs px-2 py-1 rounded border bg-gray-900 border-gray-700 text-gray-300 hover:border-gray-500">
+              Select all
+            </button>
+            <button type="button" onClick={() => setSelectedPlayers([])} className="text-xs px-2 py-1 rounded border bg-gray-900 border-gray-700 text-gray-300 hover:border-gray-500">
+              Clear all
+            </button>
+          </div>
+        </div>
         <div className="flex flex-wrap items-center gap-2">
-          <button type="button" onClick={() => setSelectedPlayers([...allPlayerIdsByElo])} className="text-xs px-2 py-1 rounded border bg-gray-900 border-gray-700 text-gray-300 hover:border-gray-500">
-            Select all
-          </button>
-          <button type="button" onClick={() => setSelectedPlayers([])} className="text-xs px-2 py-1 rounded border bg-gray-900 border-gray-700 text-gray-300 hover:border-gray-500">
-            Clear all
-          </button>
           {Object.values(players).sort((a, b) => b.elo - a.elo).map((p) => {
             const active = effectiveSelectedPlayers.includes(p.id);
             return (
@@ -629,7 +634,7 @@ export default function AnalysisPage() {
                 type="button"
                 onClick={() =>
                   setSelectedPlayers((() => {
-                    const base = selectedPlayers.length > 0 ? selectedPlayers : defaultPlayers;
+                    const base = selectedPlayersUseDefault ? defaultPlayers : selectedPlayers;
                     return base.includes(p.id)
                       ? base.filter((id) => id !== p.id)
                       : [...base, p.id];
@@ -726,14 +731,18 @@ export default function AnalysisPage() {
           </div>
 
           <div className="space-y-2">
-            <p className="text-xs text-gray-400">Filter to specific players</p>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-xs text-gray-400">Filter to specific players</p>
+              <div className="flex items-center gap-2">
+                <button type="button" onClick={() => setH2hPlayers([...allPlayerIdsByName])} className="text-xs px-2 py-1 rounded border bg-gray-900 border-gray-700 text-gray-300 hover:border-gray-500">
+                  Select all
+                </button>
+                <button type="button" onClick={() => setH2hPlayers([])} className="text-xs px-2 py-1 rounded border bg-gray-900 border-gray-700 text-gray-300 hover:border-gray-500">
+                  Clear all
+                </button>
+              </div>
+            </div>
             <div className="flex flex-wrap items-center gap-2">
-              <button type="button" onClick={() => setH2hPlayers([...allPlayerIdsByName])} className="text-xs px-2 py-1 rounded border bg-gray-900 border-gray-700 text-gray-300 hover:border-gray-500">
-                Select all
-              </button>
-              <button type="button" onClick={() => setH2hPlayers([])} className="text-xs px-2 py-1 rounded border bg-gray-900 border-gray-700 text-gray-300 hover:border-gray-500">
-                Clear all
-              </button>
               {Object.values(players).sort((a, b) => a.name.localeCompare(b.name)).map((p) => {
                 const active = h2hPlayers.includes(p.id);
                 return (
