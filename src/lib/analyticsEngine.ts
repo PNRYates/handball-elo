@@ -131,11 +131,11 @@ export function buildPerformanceTrends(
 
   const formMetrics = playerIds
     .map((id) => {
-      const recent20 = turns.slice(-20);
-      const recent10 = turns.slice(-10);
+      const turnsWithPlayer = turns.filter((t) => t.turn.courtBefore.includes(id));
+      const recent20 = turnsWithPlayer.slice(-20);
+      const recent10 = turnsWithPlayer.slice(-10);
       const net20 = recent20.reduce((sum, t) => sum + getPlayerDelta(t.turn, id), 0);
       const net10 = recent10.reduce((sum, t) => sum + getPlayerDelta(t.turn, id), 0);
-      const turnsPlayed10 = recent10.filter((t) => t.turn.courtBefore.includes(id)).length;
       const kills10 = recent10.filter(
         (t) => isDirectKillTurn(t.turn) && t.turn.killerPlayerId === id
       ).length;
@@ -143,11 +143,11 @@ export function buildPerformanceTrends(
       return {
         playerId: id,
         playerName: players[id]?.name ?? id,
-        turnsPlayed: turns.filter((t) => t.turn.courtBefore.includes(id)).length,
+        turnsPlayed: turnsWithPlayer.length,
         netElo10: net10,
         netElo20: net20,
-        killRate10: turnsPlayed10 > 0 ? kills10 / turnsPlayed10 : 0,
-        deathRate10: turnsPlayed10 > 0 ? deaths10 / turnsPlayed10 : 0,
+        killRate10: recent10.length > 0 ? kills10 / recent10.length : 0,
+        deathRate10: recent10.length > 0 ? deaths10 / recent10.length : 0,
         momentum10: recent10.length > 0 ? net10 / recent10.length : 0,
       };
     })
@@ -155,7 +155,8 @@ export function buildPerformanceTrends(
 
   const volatility = playerIds
     .map((id) => {
-      const deltas = turns.map((t) => getPlayerDelta(t.turn, id)).filter((d) => d !== 0);
+      const turnsWithPlayer = turns.filter((t) => t.turn.courtBefore.includes(id));
+      const deltas = turnsWithPlayer.map((t) => getPlayerDelta(t.turn, id));
       if (deltas.length === 0) {
         return {
           playerId: id,
@@ -166,12 +167,12 @@ export function buildPerformanceTrends(
       }
       const mean = deltas.reduce((s, d) => s + d, 0) / deltas.length;
       const variance = deltas.reduce((s, d) => s + (d - mean) ** 2, 0) / deltas.length;
-        return {
-          playerId: id,
-          playerName: players[id]?.name ?? id,
-          volatility: roundToInternal(Math.sqrt(variance)),
-          averageDelta: roundToInternal(mean),
-        };
+      return {
+        playerId: id,
+        playerName: players[id]?.name ?? id,
+        volatility: roundToInternal(Math.sqrt(variance)),
+        averageDelta: roundToInternal(mean),
+      };
     })
     .sort((a, b) => b.volatility - a.volatility);
 
