@@ -8,6 +8,7 @@ import {
   buildPositionStrategy,
   buildPlayerSummary,
   defaultSelectedPlayers,
+  filterHeadToHeadBySelectedPlayers,
   getFilteredTurns,
 } from '../src/lib/analyticsEngine.ts';
 
@@ -320,4 +321,26 @@ test('analytics keep 3-decimal precision for derived delta metrics', () => {
   assert.ok(vol);
   assert.equal(vol?.averageDelta, 0.5);
   assert.equal(vol?.volatility, 0.167);
+});
+
+
+test('filterHeadToHeadBySelectedPlayers supports one-vs-all and selected-only matchups', () => {
+  const rows = [
+    { pairKey: 'a::b', playerAId: 'a', playerAName: 'A', playerBId: 'b', playerBName: 'B', turnsTogether: 10, killsAonB: 3, killsBonA: 2, killRatioA: 1.5, netEloAminusB: 5 },
+    { pairKey: 'a::c', playerAId: 'a', playerAName: 'A', playerBId: 'c', playerBName: 'C', turnsTogether: 8, killsAonB: 2, killsBonA: 3, killRatioA: 0.67, netEloAminusB: -2 },
+    { pairKey: 'b::c', playerAId: 'b', playerAName: 'B', playerBId: 'c', playerBName: 'C', turnsTogether: 6, killsAonB: 1, killsBonA: 1, killRatioA: 1, netEloAminusB: 0 },
+    { pairKey: 'd::e', playerAId: 'd', playerAName: 'D', playerBId: 'e', playerBName: 'E', turnsTogether: 4, killsAonB: 1, killsBonA: 0, killRatioA: 1, netEloAminusB: 4 },
+  ];
+
+  const noSelection = filterHeadToHeadBySelectedPlayers(rows, []);
+  assert.equal(noSelection.length, 4);
+
+  const oneSelected = filterHeadToHeadBySelectedPlayers(rows, ['a']);
+  assert.deepEqual(oneSelected.map((r) => r.pairKey), ['a::b', 'a::c']);
+
+  const twoSelected = filterHeadToHeadBySelectedPlayers(rows, ['a', 'b']);
+  assert.deepEqual(twoSelected.map((r) => r.pairKey), ['a::b']);
+
+  const threeSelected = filterHeadToHeadBySelectedPlayers(rows, ['a', 'b', 'c']);
+  assert.deepEqual(threeSelected.map((r) => r.pairKey), ['a::b', 'a::c', 'b::c']);
 });
