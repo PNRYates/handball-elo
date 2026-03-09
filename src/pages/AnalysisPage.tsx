@@ -142,6 +142,10 @@ function getTableMaxHeight(limit: number): number {
   return 42 + limit * 34;
 }
 
+type FormSortKey = 'playerName' | 'netElo10' | 'netElo20' | 'killRate10' | 'momentum10' | 'volatility' | 'avgDelta';
+type FormSortDirection = 'asc' | 'desc';
+
+
 function Th({ label, help }: { label: string; help: string }) {
   return (
     <th className="py-1.5 pr-2">
@@ -370,6 +374,10 @@ export default function AnalysisPage() {
   const setTrendWindow = useGameStore((s) => s.setTrendWindow);
   const setTableRowsVisible = useGameStore((s) => s.setTableRowsVisible);
   const setH2hRowsVisible = useGameStore((s) => s.setH2hRowsVisible);
+  const [formSort, setFormSort] = useState<{ key: FormSortKey; direction: FormSortDirection }>({
+    key: 'netElo10',
+    direction: 'desc',
+  });
   const turns = workspace.turns;
   const gameHistory = workspace.gameHistory;
   const players = workspace.players;
@@ -422,6 +430,35 @@ export default function AnalysisPage() {
       }),
     [trends.formMetrics, volatilityById]
   );
+
+  const sortedCombinedRows = useMemo(() => {
+    const rows = [...combinedRows];
+    rows.sort((a, b) => {
+      const getValue = (row: (typeof combinedRows)[number]) => row[formSort.key];
+      const left = getValue(a);
+      const right = getValue(b);
+      if (typeof left === 'string' && typeof right === 'string') {
+        const result = left.localeCompare(right);
+        return formSort.direction === 'asc' ? result : -result;
+      }
+      const result = Number(left) - Number(right);
+      return formSort.direction === 'asc' ? result : -result;
+    });
+    return rows;
+  }, [combinedRows, formSort]);
+
+  const toggleFormSort = (key: FormSortKey) => {
+    setFormSort((current) =>
+      current.key === key
+        ? { key, direction: current.direction === 'asc' ? 'desc' : 'asc' }
+        : { key, direction: key === 'playerName' ? 'asc' : 'desc' }
+    );
+  };
+
+  const sortArrow = (key: FormSortKey) => {
+    if (formSort.key !== key) return '↕';
+    return formSort.direction === 'asc' ? '↑' : '↓';
+  };
 
   if (filtered.length === 0) return <p className="text-gray-500 text-center mt-12">No analysis yet for selected filter.</p>;
 
@@ -592,21 +629,28 @@ export default function AnalysisPage() {
           </label>
         </div>
 
-        <div className={`overflow-x-auto ${combinedRows.length > tableRowsVisible ? 'overflow-y-auto' : ''}`} style={combinedRows.length > tableRowsVisible ? { maxHeight: getTableMaxHeight(tableRowsVisible) } : undefined}>
+        <div className={`overflow-x-auto ${sortedCombinedRows.length > tableRowsVisible ? 'overflow-y-auto' : ''}`} style={sortedCombinedRows.length > tableRowsVisible ? { maxHeight: getTableMaxHeight(tableRowsVisible) } : undefined}>
           <table className="w-full text-sm">
             <thead className="sticky top-0 bg-gray-800">
               <tr className="text-left text-gray-500 border-b border-gray-700">
-                <Th label="Player" help="Player identity for this row." />
-                <Th label="Net 10" help="Net Elo change for this player across their last 10 filtered turns." />
-                <Th label="Net 20" help="Net Elo change for this player across their last 20 filtered turns." />
-                <Th label="Kill Rate 10" help="Kills divided by turns played in the last 10 turns." />
-                <Th label="Momentum" help="Average Elo delta per recent turn (Net 10 / 10)." />
-                <Th label="Volatility" help="Standard deviation of non-zero turn deltas; higher means less stable results." />
-                <Th label="Avg Delta/Turn" help="Average non-zero Elo delta per turn for this player." />
+                <th className="py-1.5 pr-2">
+                  <div className="inline-flex items-center gap-1">
+                    <InlineExplain label="Player" text="Player identity for this row." />
+                    <button type="button" className="text-xs text-gray-400 hover:text-gray-200" onClick={() => toggleFormSort('playerName')} aria-label="Sort by player">
+                      {sortArrow('playerName')}
+                    </button>
+                  </div>
+                </th>
+                <th className="py-1.5 pr-2"><div className="inline-flex items-center gap-1"><InlineExplain label="Net 10" text="Net Elo change for this player across their last 10 filtered turns." /><button type="button" className="text-xs text-gray-400 hover:text-gray-200" onClick={() => toggleFormSort('netElo10')} aria-label="Sort by net 10">{sortArrow('netElo10')}</button></div></th>
+                <th className="py-1.5 pr-2"><div className="inline-flex items-center gap-1"><InlineExplain label="Net 20" text="Net Elo change for this player across their last 20 filtered turns." /><button type="button" className="text-xs text-gray-400 hover:text-gray-200" onClick={() => toggleFormSort('netElo20')} aria-label="Sort by net 20">{sortArrow('netElo20')}</button></div></th>
+                <th className="py-1.5 pr-2"><div className="inline-flex items-center gap-1"><InlineExplain label="Kill Rate 10" text="Kills divided by turns played in the last 10 turns." /><button type="button" className="text-xs text-gray-400 hover:text-gray-200" onClick={() => toggleFormSort('killRate10')} aria-label="Sort by kill rate 10">{sortArrow('killRate10')}</button></div></th>
+                <th className="py-1.5 pr-2"><div className="inline-flex items-center gap-1"><InlineExplain label="Momentum" text="Average Elo delta per recent turn (Net 10 / 10)." /><button type="button" className="text-xs text-gray-400 hover:text-gray-200" onClick={() => toggleFormSort('momentum10')} aria-label="Sort by momentum">{sortArrow('momentum10')}</button></div></th>
+                <th className="py-1.5 pr-2"><div className="inline-flex items-center gap-1"><InlineExplain label="Volatility" text="Standard deviation of non-zero turn deltas; higher means less stable results." /><button type="button" className="text-xs text-gray-400 hover:text-gray-200" onClick={() => toggleFormSort('volatility')} aria-label="Sort by volatility">{sortArrow('volatility')}</button></div></th>
+                <th className="py-1.5 pr-2"><div className="inline-flex items-center gap-1"><InlineExplain label="Avg Delta/Turn" text="Average non-zero Elo delta per turn for this player." /><button type="button" className="text-xs text-gray-400 hover:text-gray-200" onClick={() => toggleFormSort('avgDelta')} aria-label="Sort by average delta per turn">{sortArrow('avgDelta')}</button></div></th>
               </tr>
             </thead>
             <tbody>
-              {combinedRows.map((row) => (
+              {sortedCombinedRows.map((row) => (
                 <tr key={row.playerId} className="border-b border-gray-800 last:border-b-0">
                   <td className="py-1.5 pr-2 font-medium">{row.playerName}</td>
                   <td className={`py-1.5 pr-2 font-mono ${statClass(row.netElo10)}`}>{formatDelta(row.netElo10)}</td>
