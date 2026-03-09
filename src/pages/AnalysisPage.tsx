@@ -7,6 +7,7 @@ import {
   buildPlayerSummary,
   buildPositionStrategy,
   defaultSelectedPlayers,
+  filterHeadToHeadBySelectedPlayers,
   getFilteredTurns,
   topRivalries,
 } from '../lib/analyticsEngine';
@@ -433,9 +434,7 @@ export default function AnalysisPage() {
   }, [h2h, h2hSort]);
 
   const filteredH2h = useMemo(() => {
-    if (h2hPlayers.length === 0) return sortedH2h;
-    const selected = new Set(h2hPlayers);
-    return sortedH2h.filter((row) => selected.has(row.playerAId) || selected.has(row.playerBId));
+    return filterHeadToHeadBySelectedPlayers(sortedH2h, h2hPlayers);
   }, [sortedH2h, h2hPlayers]);
 
   const sortedH2hTableRows = useMemo(() => {

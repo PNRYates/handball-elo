@@ -242,6 +242,21 @@ export function buildHeadToHead(
     .sort((a, b) => b.turnsTogether - a.turnsTogether);
 }
 
+export function filterHeadToHeadBySelectedPlayers(
+  rows: HeadToHeadRow[],
+  selectedPlayerIds: string[]
+): HeadToHeadRow[] {
+  if (selectedPlayerIds.length === 0) return rows;
+
+  const selected = new Set(selectedPlayerIds);
+
+  if (selectedPlayerIds.length === 1) {
+    return rows.filter((row) => selected.has(row.playerAId) || selected.has(row.playerBId));
+  }
+
+  return rows.filter((row) => selected.has(row.playerAId) && selected.has(row.playerBId));
+}
+
 function buildRateRows(counts: number[], total: number): PositionRateRow[] {
   return [0, 1, 2, 3].map((pos) => ({
     position: pos as 0 | 1 | 2 | 3,
