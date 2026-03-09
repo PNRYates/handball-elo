@@ -147,6 +147,16 @@ type FormSortDirection = 'asc' | 'desc';
 type H2hSortKey = 'matchup' | 'turnsTogether' | 'kills' | 'killRatioA' | 'netEloAminusB';
 type H2hSortDirection = 'asc' | 'desc';
 
+const FORM_COLUMNS: { key: FormSortKey; label: string; help: string; ariaLabel: string; title: string }[] = [
+  { key: 'playerName', label: 'Player', help: 'Player identity for this row.', ariaLabel: 'Sort by player', title: 'Toggle sort for Player column' },
+  { key: 'netElo10', label: 'Net 10', help: 'Net Elo change for this player across their last 10 filtered turns.', ariaLabel: 'Sort by net 10', title: 'Toggle sort for Net 10 column' },
+  { key: 'netElo20', label: 'Net 20', help: 'Net Elo change for this player across their last 20 filtered turns.', ariaLabel: 'Sort by net 20', title: 'Toggle sort for Net 20 column' },
+  { key: 'killRate10', label: 'Kill Rate 10', help: 'Kills divided by turns played in the last 10 turns.', ariaLabel: 'Sort by kill rate 10', title: 'Toggle sort for Kill Rate 10 column' },
+  { key: 'momentum10', label: 'Momentum', help: 'Average Elo delta per recent turn (Net 10 / 10).', ariaLabel: 'Sort by momentum', title: 'Toggle sort for Momentum column' },
+  { key: 'volatility', label: 'Volatility', help: 'Standard deviation of non-zero turn deltas; higher means less stable results.', ariaLabel: 'Sort by volatility', title: 'Toggle sort for Volatility column' },
+  { key: 'avgDelta', label: 'Avg Delta/Turn', help: 'Average non-zero Elo delta per turn for this player.', ariaLabel: 'Sort by average delta per turn', title: 'Toggle sort for Avg Delta/Turn column' },
+];
+
 
 function LineChartCard({
   title,
@@ -671,20 +681,30 @@ export default function AnalysisPage() {
           <table className="w-full text-sm">
             <thead className="sticky top-0 bg-gray-800">
               <tr className="text-left text-gray-500 border-b border-gray-700">
-                <th className="py-1.5 pr-2">
-                  <div className="inline-flex items-center gap-1">
-                    <InlineExplain label="Player" text="Player identity for this row." />
-                    <button type="button" className="text-xs text-gray-400 hover:text-gray-200" onClick={() => toggleFormSort('playerName')} aria-label="Sort by player">
-                      {sortArrow('playerName')}
-                    </button>
-                  </div>
-                </th>
-                <th className="py-1.5 pr-2"><div className="inline-flex items-center gap-1"><InlineExplain label="Net 10" text="Net Elo change for this player across their last 10 filtered turns." /><button type="button" className="text-xs text-gray-400 hover:text-gray-200" onClick={() => toggleFormSort('netElo10')} aria-label="Sort by net 10">{sortArrow('netElo10')}</button></div></th>
-                <th className="py-1.5 pr-2"><div className="inline-flex items-center gap-1"><InlineExplain label="Net 20" text="Net Elo change for this player across their last 20 filtered turns." /><button type="button" className="text-xs text-gray-400 hover:text-gray-200" onClick={() => toggleFormSort('netElo20')} aria-label="Sort by net 20">{sortArrow('netElo20')}</button></div></th>
-                <th className="py-1.5 pr-2"><div className="inline-flex items-center gap-1"><InlineExplain label="Kill Rate 10" text="Kills divided by turns played in the last 10 turns." /><button type="button" className="text-xs text-gray-400 hover:text-gray-200" onClick={() => toggleFormSort('killRate10')} aria-label="Sort by kill rate 10">{sortArrow('killRate10')}</button></div></th>
-                <th className="py-1.5 pr-2"><div className="inline-flex items-center gap-1"><InlineExplain label="Momentum" text="Average Elo delta per recent turn (Net 10 / 10)." /><button type="button" className="text-xs text-gray-400 hover:text-gray-200" onClick={() => toggleFormSort('momentum10')} aria-label="Sort by momentum">{sortArrow('momentum10')}</button></div></th>
-                <th className="py-1.5 pr-2"><div className="inline-flex items-center gap-1"><InlineExplain label="Volatility" text="Standard deviation of non-zero turn deltas; higher means less stable results." /><button type="button" className="text-xs text-gray-400 hover:text-gray-200" onClick={() => toggleFormSort('volatility')} aria-label="Sort by volatility">{sortArrow('volatility')}</button></div></th>
-                <th className="py-1.5 pr-2"><div className="inline-flex items-center gap-1"><InlineExplain label="Avg Delta/Turn" text="Average non-zero Elo delta per turn for this player." /><button type="button" className="text-xs text-gray-400 hover:text-gray-200" onClick={() => toggleFormSort('avgDelta')} aria-label="Sort by average delta per turn">{sortArrow('avgDelta')}</button></div></th>
+                {FORM_COLUMNS.map((col) => (
+                  <th
+                    key={col.key}
+                    className="py-1.5 pr-2"
+                    aria-sort={
+                      formSort.key === col.key
+                        ? formSort.direction === 'asc' ? 'ascending' : 'descending'
+                        : 'none'
+                    }
+                  >
+                    <div className="inline-flex items-center gap-1">
+                      <InlineExplain label={col.label} text={col.help} />
+                      <button
+                        type="button"
+                        className="text-xs text-gray-400 hover:text-gray-200"
+                        onClick={() => toggleFormSort(col.key)}
+                        aria-label={col.ariaLabel}
+                        title={col.title}
+                      >
+                        {sortArrow(col.key)}
+                      </button>
+                    </div>
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody>
