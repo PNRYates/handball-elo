@@ -390,6 +390,8 @@ export default function AnalysisPage() {
   const filtered = useMemo(() => getFilteredTurns(turns, gameHistory, filter), [turns, gameHistory, filter]);
   const defaultPlayers = useMemo(() => defaultSelectedPlayers(filtered), [filtered]);
   const effectiveSelectedPlayers = selectedPlayers.length > 0 ? selectedPlayers : defaultPlayers;
+  const allPlayerIdsByElo = useMemo(() => Object.values(players).sort((a, b) => b.elo - a.elo).map((p) => p.id), [players]);
+  const allPlayerIdsByName = useMemo(() => Object.values(players).sort((a, b) => a.name.localeCompare(b.name)).map((p) => p.id), [players]);
 
   const trends = useMemo(
     () => buildPerformanceTrends(filtered, players, effectiveSelectedPlayers),
@@ -612,7 +614,13 @@ export default function AnalysisPage() {
         <h2 className="font-medium">
           <InlineExplain label="Selected Players" text="Select which players appear in the Performance Trends chart. Defaults to most active players." />
         </h2>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <button type="button" onClick={() => setSelectedPlayers([...allPlayerIdsByElo])} className="text-xs px-2 py-1 rounded border bg-gray-900 border-gray-700 text-gray-300 hover:border-gray-500">
+            Select all
+          </button>
+          <button type="button" onClick={() => setSelectedPlayers([])} className="text-xs px-2 py-1 rounded border bg-gray-900 border-gray-700 text-gray-300 hover:border-gray-500">
+            Clear all
+          </button>
           {Object.values(players).sort((a, b) => b.elo - a.elo).map((p) => {
             const active = effectiveSelectedPlayers.includes(p.id);
             return (
@@ -719,7 +727,13 @@ export default function AnalysisPage() {
 
           <div className="space-y-2">
             <p className="text-xs text-gray-400">Filter to specific players</p>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <button type="button" onClick={() => setH2hPlayers([...allPlayerIdsByName])} className="text-xs px-2 py-1 rounded border bg-gray-900 border-gray-700 text-gray-300 hover:border-gray-500">
+                Select all
+              </button>
+              <button type="button" onClick={() => setH2hPlayers([])} className="text-xs px-2 py-1 rounded border bg-gray-900 border-gray-700 text-gray-300 hover:border-gray-500">
+                Clear all
+              </button>
               {Object.values(players).sort((a, b) => a.name.localeCompare(b.name)).map((p) => {
                 const active = h2hPlayers.includes(p.id);
                 return (
@@ -737,11 +751,6 @@ export default function AnalysisPage() {
                   </button>
                 );
               })}
-              {h2hPlayers.length > 0 && (
-                <button type="button" onClick={() => setH2hPlayers([])} className="text-xs px-2 py-1 rounded border bg-gray-900 border-gray-700 text-gray-300 hover:border-gray-500">
-                  Clear
-                </button>
-              )}
             </div>
           </div>
 
