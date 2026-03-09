@@ -32,6 +32,7 @@ export interface TurnStateSnapshot {
 export interface WorkspaceAnalyticsState {
   filter: AnalyticsFilterState;
   selectedPlayers: string[];
+  selectedPlayersUseDefault: boolean;
   h2hSort: 'volume' | 'net' | 'ratio';
   h2hPlayers: string[];
   trendWindow: 'all' | '50' | '20';
@@ -125,6 +126,7 @@ function createDefaultAnalyticsState(): WorkspaceAnalyticsState {
   return {
     filter: { ...DEFAULT_ANALYTICS_FILTER },
     selectedPlayers: [],
+    selectedPlayersUseDefault: true,
     h2hSort: 'volume',
     h2hPlayers: [],
     trendWindow: 'all',
@@ -220,6 +222,10 @@ function sanitizeAnalyticsState(input: unknown): WorkspaceAnalyticsState {
     selectedPlayers: Array.isArray(input.selectedPlayers)
       ? input.selectedPlayers.filter((id): id is string => typeof id === 'string')
       : fallback.selectedPlayers,
+    selectedPlayersUseDefault:
+      typeof input.selectedPlayersUseDefault === 'boolean'
+        ? input.selectedPlayersUseDefault
+        : fallback.selectedPlayersUseDefault,
     h2hSort:
       input.h2hSort === 'net' || input.h2hSort === 'ratio' || input.h2hSort === 'volume'
         ? input.h2hSort
@@ -658,6 +664,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
         analytics: {
           ...workspace.analytics,
           selectedPlayers: [...next],
+          selectedPlayersUseDefault: false,
         },
       }))
     );

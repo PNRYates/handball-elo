@@ -142,13 +142,11 @@ function getTableMaxHeight(limit: number): number {
   return 42 + limit * 34;
 }
 
-function Th({ label, help }: { label: string; help: string }) {
-  return (
-    <th className="py-1.5 pr-2">
-      <InlineExplain label={label} text={help} />
-    </th>
-  );
-}
+type FormSortKey = 'playerName' | 'netElo10' | 'netElo20' | 'killRate10' | 'momentum10' | 'volatility' | 'avgDelta';
+type FormSortDirection = 'asc' | 'desc';
+type H2hSortKey = 'matchup' | 'turnsTogether' | 'kills' | 'killRatioA' | 'netEloAminusB';
+type H2hSortDirection = 'asc' | 'desc';
+
 
 function LineChartCard({
   title,
@@ -230,8 +228,28 @@ function LineChartCard({
       ? displaySeries[hoveredIndex]
       : null;
 
-  const tooltipWidth = 220;
-  const tooltipHeight = 120;
+  const tooltipRows = hoverPoint
+    ? selected
+        .map((id, i) => {
+          const value = hoverPoint.values[id] ?? 0;
+          const y = toY(value);
+          return {
+            id,
+            color: colors[i % colors.length],
+            value,
+            yDistance: hoverPointPx ? Math.abs(y - hoverPointPx.y) : 0,
+          };
+        })
+        .sort((a, b) => a.yDistance - b.yDistance)
+    : [];
+  const maxTooltipRows = selected.length > 10 ? 8 : 10;
+  const nearbyThresholdPx = 18;
+  const nearbyRows = tooltipRows.filter((row) => row.yDistance <= nearbyThresholdPx);
+  const visibleTooltipRows = (nearbyRows.length >= 3 ? nearbyRows : tooltipRows).slice(0, maxTooltipRows);
+  const hiddenTooltipRowCount = Math.max(0, tooltipRows.length - visibleTooltipRows.length);
+
+  const tooltipWidth = 240;
+  const tooltipHeight = 30 + visibleTooltipRows.length * 20 + (hiddenTooltipRowCount > 0 ? 18 : 0);
   const tooltipLeft = hoverPointPx
     ? Math.min(Math.max(8, hoverPointPx.x + 14), Math.max(8, chartWidth - tooltipWidth - 8))
     : 8;
@@ -335,15 +353,18 @@ function LineChartCard({
           >
             <p className="text-gray-400 mb-1">{hoverPoint.label}</p>
             <div className="space-y-1">
-              {selected.map((id, i) => (
-                <div key={`${id}-tip`} className="flex justify-between gap-2">
+              {visibleTooltipRows.map((row) => (
+                <div key={`${row.id}-tip`} className="flex justify-between gap-2">
                   <span className="inline-flex items-center gap-1 truncate">
-                    <span className="w-2 h-2 rounded-full" style={{ background: colors[i % colors.length] }} />
-                    {players[id]?.name ?? id}
+                    <span className="w-2 h-2 rounded-full" style={{ background: row.color }} />
+                    {players[row.id]?.name ?? row.id}
                   </span>
-                  <span className="font-mono">{formatDelta(hoverPoint.values[id] ?? 0)}</span>
+                  <span className="font-mono">{formatDelta(row.value)}</span>
                 </div>
               ))}
+              {hiddenTooltipRowCount > 0 && (
+                <p className="text-[11px] text-gray-500">+{hiddenTooltipRowCount} more players</p>
+              )}
             </div>
           </div>
         )}
@@ -370,11 +391,20 @@ export default function AnalysisPage() {
   const setTrendWindow = useGameStore((s) => s.setTrendWindow);
   const setTableRowsVisible = useGameStore((s) => s.setTableRowsVisible);
   const setH2hRowsVisible = useGameStore((s) => s.setH2hRowsVisible);
+  const [formSort, setFormSort] = useState<{ key: FormSortKey; direction: FormSortDirection }>({
+    key: 'netElo10',
+    direction: 'desc',
+  });
+  const [h2hTableSort, setH2hTableSort] = useState<{ key: H2hSortKey; direction: H2hSortDirection }>({
+    key: 'turnsTogether',
+    direction: 'desc',
+  });
   const turns = workspace.turns;
   const gameHistory = workspace.gameHistory;
   const players = workspace.players;
   const filter = workspace.analytics.filter;
   const selectedPlayers = workspace.analytics.selectedPlayers;
+  const selectedPlayersUseDefault = workspace.analytics.selectedPlayersUseDefault;
   const h2hSort = workspace.analytics.h2hSort;
   const h2hPlayers = workspace.analytics.h2hPlayers;
   const trendWindow = workspace.analytics.trendWindow;
@@ -383,7 +413,9 @@ export default function AnalysisPage() {
 
   const filtered = useMemo(() => getFilteredTurns(turns, gameHistory, filter), [turns, gameHistory, filter]);
   const defaultPlayers = useMemo(() => defaultSelectedPlayers(filtered), [filtered]);
-  const effectiveSelectedPlayers = selectedPlayers.length > 0 ? selectedPlayers : defaultPlayers;
+  const effectiveSelectedPlayers = selectedPlayersUseDefault ? defaultPlayers : selectedPlayers;
+  const allPlayerIdsByElo = useMemo(() => Object.values(players).sort((a, b) => b.elo - a.elo).map((p) => p.id), [players]);
+  const allPlayerIdsByName = useMemo(() => Object.values(players).sort((a, b) => a.name.localeCompare(b.name)).map((p) => p.id), [players]);
 
   const trends = useMemo(
     () => buildPerformanceTrends(filtered, players, effectiveSelectedPlayers),
@@ -406,7 +438,39 @@ export default function AnalysisPage() {
     return sortedH2h.filter((row) => selected.has(row.playerAId) || selected.has(row.playerBId));
   }, [sortedH2h, h2hPlayers]);
 
-  const top = topRivalries(filteredH2h, 8);
+  const sortedH2hTableRows = useMemo(() => {
+    const rows = [...filteredH2h];
+    rows.sort((a, b) => {
+      const direction = h2hTableSort.direction === 'asc' ? 1 : -1;
+      if (h2hTableSort.key === 'matchup') {
+        const left = `${a.playerAName} vs ${a.playerBName}`;
+        const right = `${b.playerAName} vs ${b.playerBName}`;
+        return left.localeCompare(right) * direction;
+      }
+      if (h2hTableSort.key === 'kills') {
+        const left = a.killsAonB + a.killsBonA;
+        const right = b.killsAonB + b.killsBonA;
+        return (left - right) * direction;
+      }
+      return (a[h2hTableSort.key] - b[h2hTableSort.key]) * direction;
+    });
+    return rows;
+  }, [filteredH2h, h2hTableSort]);
+
+  const toggleH2hTableSort = (key: H2hSortKey) => {
+    setH2hTableSort((current) =>
+      current.key === key
+        ? { key, direction: current.direction === 'asc' ? 'desc' : 'asc' }
+        : { key, direction: key === 'matchup' ? 'asc' : 'desc' }
+    );
+  };
+
+  const h2hSortArrow = (key: H2hSortKey) => {
+    if (h2hTableSort.key !== key) return '↕';
+    return h2hTableSort.direction === 'asc' ? '↑' : '↓';
+  };
+
+  const top = topRivalries(sortedH2hTableRows, 8);
 
   const volatilityById = useMemo(() => {
     const map = new Map<string, { volatility: number; averageDelta: number }>();
@@ -422,6 +486,35 @@ export default function AnalysisPage() {
       }),
     [trends.formMetrics, volatilityById]
   );
+
+  const sortedCombinedRows = useMemo(() => {
+    const rows = [...combinedRows];
+    rows.sort((a, b) => {
+      const getValue = (row: (typeof combinedRows)[number]) => row[formSort.key];
+      const left = getValue(a);
+      const right = getValue(b);
+      if (typeof left === 'string' && typeof right === 'string') {
+        const result = left.localeCompare(right);
+        return formSort.direction === 'asc' ? result : -result;
+      }
+      const result = Number(left) - Number(right);
+      return formSort.direction === 'asc' ? result : -result;
+    });
+    return rows;
+  }, [combinedRows, formSort]);
+
+  const toggleFormSort = (key: FormSortKey) => {
+    setFormSort((current) =>
+      current.key === key
+        ? { key, direction: current.direction === 'asc' ? 'desc' : 'asc' }
+        : { key, direction: key === 'playerName' ? 'asc' : 'desc' }
+    );
+  };
+
+  const sortArrow = (key: FormSortKey) => {
+    if (formSort.key !== key) return '↕';
+    return formSort.direction === 'asc' ? '↑' : '↓';
+  };
 
   if (filtered.length === 0) return <p className="text-gray-500 text-center mt-12">No analysis yet for selected filter.</p>;
 
@@ -542,10 +635,20 @@ export default function AnalysisPage() {
       </section>
 
       <section className="bg-gray-800 border border-gray-700 rounded-lg p-4 space-y-3">
-        <h2 className="font-medium">
-          <InlineExplain label="Selected Players" text="Select which players appear in the Performance Trends chart. Defaults to most active players." />
-        </h2>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="font-medium">
+            <InlineExplain label="Selected Players" text="Select which players appear in the Performance Trends chart. Defaults to most active players." />
+          </h2>
+          <div className="flex items-center gap-2">
+            <button type="button" onClick={() => setSelectedPlayers([...allPlayerIdsByElo])} className="text-xs px-2 py-1 rounded border bg-gray-900 border-gray-700 text-gray-300 hover:border-gray-500">
+              Select all
+            </button>
+            <button type="button" onClick={() => setSelectedPlayers([])} className="text-xs px-2 py-1 rounded border bg-gray-900 border-gray-700 text-gray-300 hover:border-gray-500">
+              Clear all
+            </button>
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
           {Object.values(players).sort((a, b) => b.elo - a.elo).map((p) => {
             const active = effectiveSelectedPlayers.includes(p.id);
             return (
@@ -554,7 +657,7 @@ export default function AnalysisPage() {
                 type="button"
                 onClick={() =>
                   setSelectedPlayers((() => {
-                    const base = selectedPlayers.length > 0 ? selectedPlayers : defaultPlayers;
+                    const base = selectedPlayersUseDefault ? defaultPlayers : selectedPlayers;
                     return base.includes(p.id)
                       ? base.filter((id) => id !== p.id)
                       : [...base, p.id];
@@ -592,21 +695,28 @@ export default function AnalysisPage() {
           </label>
         </div>
 
-        <div className={`overflow-x-auto ${combinedRows.length > tableRowsVisible ? 'overflow-y-auto' : ''}`} style={combinedRows.length > tableRowsVisible ? { maxHeight: getTableMaxHeight(tableRowsVisible) } : undefined}>
+        <div className={`overflow-x-auto ${sortedCombinedRows.length > tableRowsVisible ? 'overflow-y-auto' : ''}`} style={sortedCombinedRows.length > tableRowsVisible ? { maxHeight: getTableMaxHeight(tableRowsVisible) } : undefined}>
           <table className="w-full text-sm">
             <thead className="sticky top-0 bg-gray-800">
               <tr className="text-left text-gray-500 border-b border-gray-700">
-                <Th label="Player" help="Player identity for this row." />
-                <Th label="Net 10" help="Net Elo change for this player across their last 10 filtered turns." />
-                <Th label="Net 20" help="Net Elo change for this player across their last 20 filtered turns." />
-                <Th label="Kill Rate 10" help="Kills divided by turns played in the last 10 turns." />
-                <Th label="Momentum" help="Average Elo delta per recent turn (Net 10 / 10)." />
-                <Th label="Volatility" help="Standard deviation of non-zero turn deltas; higher means less stable results." />
-                <Th label="Avg Delta/Turn" help="Average non-zero Elo delta per turn for this player." />
+                <th className="py-1.5 pr-2">
+                  <div className="inline-flex items-center gap-1">
+                    <InlineExplain label="Player" text="Player identity for this row." />
+                    <button type="button" className="text-xs text-gray-400 hover:text-gray-200" onClick={() => toggleFormSort('playerName')} aria-label="Sort by player">
+                      {sortArrow('playerName')}
+                    </button>
+                  </div>
+                </th>
+                <th className="py-1.5 pr-2"><div className="inline-flex items-center gap-1"><InlineExplain label="Net 10" text="Net Elo change for this player across their last 10 filtered turns." /><button type="button" className="text-xs text-gray-400 hover:text-gray-200" onClick={() => toggleFormSort('netElo10')} aria-label="Sort by net 10">{sortArrow('netElo10')}</button></div></th>
+                <th className="py-1.5 pr-2"><div className="inline-flex items-center gap-1"><InlineExplain label="Net 20" text="Net Elo change for this player across their last 20 filtered turns." /><button type="button" className="text-xs text-gray-400 hover:text-gray-200" onClick={() => toggleFormSort('netElo20')} aria-label="Sort by net 20">{sortArrow('netElo20')}</button></div></th>
+                <th className="py-1.5 pr-2"><div className="inline-flex items-center gap-1"><InlineExplain label="Kill Rate 10" text="Kills divided by turns played in the last 10 turns." /><button type="button" className="text-xs text-gray-400 hover:text-gray-200" onClick={() => toggleFormSort('killRate10')} aria-label="Sort by kill rate 10">{sortArrow('killRate10')}</button></div></th>
+                <th className="py-1.5 pr-2"><div className="inline-flex items-center gap-1"><InlineExplain label="Momentum" text="Average Elo delta per recent turn (Net 10 / 10)." /><button type="button" className="text-xs text-gray-400 hover:text-gray-200" onClick={() => toggleFormSort('momentum10')} aria-label="Sort by momentum">{sortArrow('momentum10')}</button></div></th>
+                <th className="py-1.5 pr-2"><div className="inline-flex items-center gap-1"><InlineExplain label="Volatility" text="Standard deviation of non-zero turn deltas; higher means less stable results." /><button type="button" className="text-xs text-gray-400 hover:text-gray-200" onClick={() => toggleFormSort('volatility')} aria-label="Sort by volatility">{sortArrow('volatility')}</button></div></th>
+                <th className="py-1.5 pr-2"><div className="inline-flex items-center gap-1"><InlineExplain label="Avg Delta/Turn" text="Average non-zero Elo delta per turn for this player." /><button type="button" className="text-xs text-gray-400 hover:text-gray-200" onClick={() => toggleFormSort('avgDelta')} aria-label="Sort by average delta per turn">{sortArrow('avgDelta')}</button></div></th>
               </tr>
             </thead>
             <tbody>
-              {combinedRows.map((row) => (
+              {sortedCombinedRows.map((row) => (
                 <tr key={row.playerId} className="border-b border-gray-800 last:border-b-0">
                   <td className="py-1.5 pr-2 font-medium">{row.playerName}</td>
                   <td className={`py-1.5 pr-2 font-mono ${statClass(row.netElo10)}`}>{formatDelta(row.netElo10)}</td>
@@ -644,8 +754,18 @@ export default function AnalysisPage() {
           </div>
 
           <div className="space-y-2">
-            <p className="text-xs text-gray-400">Filter to specific players</p>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-xs text-gray-400">Filter to specific players</p>
+              <div className="flex items-center gap-2">
+                <button type="button" onClick={() => setH2hPlayers([...allPlayerIdsByName])} className="text-xs px-2 py-1 rounded border bg-gray-900 border-gray-700 text-gray-300 hover:border-gray-500">
+                  Select all
+                </button>
+                <button type="button" onClick={() => setH2hPlayers([])} className="text-xs px-2 py-1 rounded border bg-gray-900 border-gray-700 text-gray-300 hover:border-gray-500">
+                  Clear all
+                </button>
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
               {Object.values(players).sort((a, b) => a.name.localeCompare(b.name)).map((p) => {
                 const active = h2hPlayers.includes(p.id);
                 return (
@@ -663,11 +783,6 @@ export default function AnalysisPage() {
                   </button>
                 );
               })}
-              {h2hPlayers.length > 0 && (
-                <button type="button" onClick={() => setH2hPlayers([])} className="text-xs px-2 py-1 rounded border bg-gray-900 border-gray-700 text-gray-300 hover:border-gray-500">
-                  Clear
-                </button>
-              )}
             </div>
           </div>
 
@@ -682,19 +797,19 @@ export default function AnalysisPage() {
             </label>
           </div>
 
-          <div className={`overflow-x-auto ${filteredH2h.length > h2hRowsVisible ? 'overflow-y-auto' : ''}`} style={filteredH2h.length > h2hRowsVisible ? { maxHeight: getTableMaxHeight(h2hRowsVisible) } : undefined}>
+          <div className={`overflow-x-auto ${sortedH2hTableRows.length > h2hRowsVisible ? 'overflow-y-auto' : ''}`} style={sortedH2hTableRows.length > h2hRowsVisible ? { maxHeight: getTableMaxHeight(h2hRowsVisible) } : undefined}>
             <table className="w-full text-sm">
               <thead className="sticky top-0 bg-gray-800">
                 <tr className="text-left text-gray-500 border-b border-gray-700">
-                  <Th label="Matchup" help="Player pair compared in this head-to-head row." />
-                  <Th label="Turns" help="How many turns both players shared court time." />
-                  <Th label="Kills A-B" help="Direct eliminations: player A on player B and vice versa." />
-                  <Th label="Kill Ratio A" help="Kills by player A divided by kills by player B (smoothed when denominator is zero)." />
-                  <Th label="Net Elo A-B" help="Net Elo differential between A and B during shared turns." />
+                  <th className="py-1.5 pr-2"><div className="inline-flex items-center gap-1"><InlineExplain label="Matchup" text="Player pair compared in this head-to-head row." /><button type="button" className="text-xs text-gray-400 hover:text-gray-200" onClick={() => toggleH2hTableSort('matchup')} aria-label="Sort by matchup">{h2hSortArrow('matchup')}</button></div></th>
+                  <th className="py-1.5 pr-2"><div className="inline-flex items-center gap-1"><InlineExplain label="Turns" text="How many turns both players shared court time." /><button type="button" className="text-xs text-gray-400 hover:text-gray-200" onClick={() => toggleH2hTableSort('turnsTogether')} aria-label="Sort by turns">{h2hSortArrow('turnsTogether')}</button></div></th>
+                  <th className="py-1.5 pr-2"><div className="inline-flex items-center gap-1"><InlineExplain label="Kills A-B" text="Direct eliminations: player A on player B and vice versa." /><button type="button" className="text-xs text-gray-400 hover:text-gray-200" onClick={() => toggleH2hTableSort('kills')} aria-label="Sort by kills">{h2hSortArrow('kills')}</button></div></th>
+                  <th className="py-1.5 pr-2"><div className="inline-flex items-center gap-1"><InlineExplain label="Kill Ratio A" text="Kills by player A divided by kills by player B (smoothed when denominator is zero)." /><button type="button" className="text-xs text-gray-400 hover:text-gray-200" onClick={() => toggleH2hTableSort('killRatioA')} aria-label="Sort by kill ratio">{h2hSortArrow('killRatioA')}</button></div></th>
+                  <th className="py-1.5 pr-2"><div className="inline-flex items-center gap-1"><InlineExplain label="Net Elo A-B" text="Net Elo differential between A and B during shared turns." /><button type="button" className="text-xs text-gray-400 hover:text-gray-200" onClick={() => toggleH2hTableSort('netEloAminusB')} aria-label="Sort by net elo">{h2hSortArrow('netEloAminusB')}</button></div></th>
                 </tr>
               </thead>
               <tbody>
-                {filteredH2h.map((row: HeadToHeadRow) => (
+                {sortedH2hTableRows.map((row: HeadToHeadRow) => (
                   <tr key={row.pairKey} className="border-b border-gray-800 last:border-b-0">
                     <td className="py-1.5 pr-2">{row.playerAName} vs {row.playerBName}</td>
                     <td className="py-1.5 pr-2 font-mono">{row.turnsTogether}</td>
