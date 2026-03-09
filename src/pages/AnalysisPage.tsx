@@ -228,8 +228,28 @@ function LineChartCard({
       ? displaySeries[hoveredIndex]
       : null;
 
-  const tooltipWidth = 220;
-  const tooltipHeight = 120;
+  const tooltipRows = hoverPoint
+    ? selected
+        .map((id, i) => {
+          const value = hoverPoint.values[id] ?? 0;
+          const y = toY(value);
+          return {
+            id,
+            color: colors[i % colors.length],
+            value,
+            yDistance: hoverPointPx ? Math.abs(y - hoverPointPx.y) : 0,
+          };
+        })
+        .sort((a, b) => a.yDistance - b.yDistance)
+    : [];
+  const maxTooltipRows = selected.length > 10 ? 8 : 10;
+  const nearbyThresholdPx = 18;
+  const nearbyRows = tooltipRows.filter((row) => row.yDistance <= nearbyThresholdPx);
+  const visibleTooltipRows = (nearbyRows.length >= 3 ? nearbyRows : tooltipRows).slice(0, maxTooltipRows);
+  const hiddenTooltipRowCount = Math.max(0, tooltipRows.length - visibleTooltipRows.length);
+
+  const tooltipWidth = 240;
+  const tooltipHeight = 30 + visibleTooltipRows.length * 20 + (hiddenTooltipRowCount > 0 ? 18 : 0);
   const tooltipLeft = hoverPointPx
     ? Math.min(Math.max(8, hoverPointPx.x + 14), Math.max(8, chartWidth - tooltipWidth - 8))
     : 8;
@@ -333,15 +353,18 @@ function LineChartCard({
           >
             <p className="text-gray-400 mb-1">{hoverPoint.label}</p>
             <div className="space-y-1">
-              {selected.map((id, i) => (
-                <div key={`${id}-tip`} className="flex justify-between gap-2">
+              {visibleTooltipRows.map((row) => (
+                <div key={`${row.id}-tip`} className="flex justify-between gap-2">
                   <span className="inline-flex items-center gap-1 truncate">
-                    <span className="w-2 h-2 rounded-full" style={{ background: colors[i % colors.length] }} />
-                    {players[id]?.name ?? id}
+                    <span className="w-2 h-2 rounded-full" style={{ background: row.color }} />
+                    {players[row.id]?.name ?? row.id}
                   </span>
-                  <span className="font-mono">{formatDelta(hoverPoint.values[id] ?? 0)}</span>
+                  <span className="font-mono">{formatDelta(row.value)}</span>
                 </div>
               ))}
+              {hiddenTooltipRowCount > 0 && (
+                <p className="text-[11px] text-gray-500">+{hiddenTooltipRowCount} more players</p>
+              )}
             </div>
           </div>
         )}
