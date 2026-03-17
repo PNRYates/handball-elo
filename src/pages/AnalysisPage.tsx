@@ -515,8 +515,6 @@ export default function AnalysisPage() {
     return formSort.direction === 'asc' ? '↑' : '↓';
   };
 
-  if (filtered.length === 0) return <p className="text-gray-500 text-center mt-12">No analysis yet for selected filter.</p>;
-
   return (
     <div className="space-y-6">
       <div>
@@ -614,6 +612,10 @@ export default function AnalysisPage() {
         </div>
       </section>
 
+      {filtered.length === 0 ? (
+        <p className="text-gray-500 text-center mt-2">No analysis yet for selected filter.</p>
+      ) : (
+        <>
       <section className="grid grid-cols-2 md:grid-cols-4 gap-2">
         <div className="bg-gray-800 border border-gray-700 rounded-lg p-3">
           <p className="text-xs text-gray-500"><InlineExplain label="Turns" text="Total turns in the currently selected analytics filter window." /></p>
@@ -869,6 +871,8 @@ export default function AnalysisPage() {
           </div>
         </section>
       </div>
+        </>
+      )}
     </div>
   );
 }
