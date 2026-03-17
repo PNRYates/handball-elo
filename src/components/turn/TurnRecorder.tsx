@@ -22,6 +22,7 @@ interface Props {
   recentEntrants: string[];
   onQuickSwapPick: (name: string) => void;
   showQuickSwap: boolean;
+  suggestedReserveName?: string | null;
 }
 
 export default function TurnRecorder({
@@ -40,6 +41,7 @@ export default function TurnRecorder({
   recentEntrants,
   onQuickSwapPick,
   showQuickSwap,
+  suggestedReserveName,
 }: Props) {
   const court = useGameStore((s) => selectActiveWorkspace(s).court);
   const players = useGameStore((s) => selectActiveWorkspace(s).players);
@@ -93,6 +95,15 @@ export default function TurnRecorder({
           <label className="block text-xs text-gray-500 mb-1">
             New player entering at #4
           </label>
+          {suggestedReserveName && (
+            <button
+              type="button"
+              onClick={() => onConfirm(suggestedReserveName)}
+              className="mb-2 w-full text-xs bg-amber-600/20 border border-amber-500/50 text-amber-200 rounded px-2 py-1.5 hover:bg-amber-600/30"
+            >
+              Promote #1 reserve: {suggestedReserveName}
+            </button>
+          )}
           {showQuickSwap && (
             <QuickSwapChips
               reserveNames={reserves.slice(0, 8)}
@@ -134,10 +145,13 @@ export default function TurnRecorder({
         </button>
       )}
 
-      {/* Esc hint */}
-      <p className="text-[10px] text-gray-600 text-center">
-        Esc to cancel
-      </p>
+      <button
+        type="button"
+        onClick={onReset}
+        className="w-full text-xs bg-gray-900 border border-gray-700 hover:border-gray-500 rounded py-1.5"
+      >
+        Cancel (Esc)
+      </button>
     </div>
   );
 }

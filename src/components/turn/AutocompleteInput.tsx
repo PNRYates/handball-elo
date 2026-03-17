@@ -68,7 +68,7 @@ export default function AutocompleteInput({
   const showDropdown = focused && filtered.length > 0 && query.length > 0;
 
   return (
-    <div>
+    <div className="autocomplete-input">
       <input
         ref={inputRef}
         type="text"
@@ -82,11 +82,11 @@ export default function AutocompleteInput({
         onBlur={() => setFocused(false)}
         placeholder="Player name"
         autoComplete="off"
-        className="w-full bg-transparent border border-gray-700 rounded-lg px-3 py-2.5 text-gray-100 placeholder-gray-600 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500"
+        className="autocomplete-field w-full bg-transparent border border-gray-700 rounded-lg px-3 py-2.5 text-gray-100 placeholder-gray-600 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500"
       />
 
       {showDropdown && (
-        <div className="mt-1 border border-gray-700 rounded-lg overflow-hidden">
+        <div className="autocomplete-dropdown mt-1 border border-gray-700 rounded-lg overflow-hidden">
           {filtered.map((name, i) => (
             <button
               key={name}
@@ -98,7 +98,7 @@ export default function AutocompleteInput({
               }}
               className={`w-full text-left px-3 py-1.5 text-sm transition-colors flex items-center justify-between ${
                 i === safeIndex
-                  ? 'bg-amber-600/20 text-amber-300'
+                  ? 'autocomplete-option-active bg-amber-600/20 text-amber-300'
                   : 'text-gray-400 hover:bg-gray-700 hover:text-gray-200'
               }`}
             >
