@@ -24,7 +24,7 @@ export default function CourtPage() {
   const recentEntrants = useGameStore((s) => selectActiveWorkspace(s).recentEntrants);
   const trackReserveLine = useGameStore((s) => selectActiveWorkspace(s).trackReserveLine);
   const reserveLineIds = useGameStore((s) => selectActiveWorkspace(s).reserveLine);
-  const reserveHoldPlayerId = useGameStore((s) => selectActiveWorkspace(s).reserveHoldPlayerId);
+  const reserveHoldPlayerIds = useGameStore((s) => selectActiveWorkspace(s).reserveHoldPlayerIds);
   const addToReserveLine = useGameStore((s) => s.addToReserveLine);
   const moveReserveLinePlayer = useGameStore((s) => s.moveReserveLinePlayer);
   const removeFromReserveLine = useGameStore((s) => s.removeFromReserveLine);
@@ -81,8 +81,11 @@ export default function CourtPage() {
   const reserveLineNames = reserveLineIds
     .filter((id) => !court.includes(id))
     .map((id) => players[id]?.name ?? id);
+  const heldReserveNames = reserveHoldPlayerIds
+    .filter((id) => !court.includes(id))
+    .map((id) => players[id]?.name ?? id);
   const suggestedReserveName = needsNewPlayer
-    ? (reserveHoldPlayerId ? (players[reserveHoldPlayerId]?.name ?? reserveHoldPlayerId) : reserveLineNames[0] ?? null)
+    ? (heldReserveNames[0] ?? reserveLineNames[0] ?? null)
     : null;
 
   useEffect(() => {
@@ -199,7 +202,7 @@ export default function CourtPage() {
           onRedo={redoLastTurn}
         />
       )}
-      <div className={trackReserveLine ? 'grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(320px,1fr)] items-start' : ''}>
+      <div className={trackReserveLine ? 'grid gap-4 lg:grid-cols-[minmax(0,4fr)_minmax(320px,1fr)] items-start' : ''}>
         <div className="space-y-4">
           <CourtDisplay
             killerPos={requireKiller ? killerPos : null}
@@ -229,13 +232,8 @@ export default function CourtPage() {
         {trackReserveLine && (
           <ReserveLinePanel
             reserveLine={reserveLineNames}
-            reserveHoldPlayerName={reserveHoldPlayerId ? (players[reserveHoldPlayerId]?.name ?? reserveHoldPlayerId) : null}
-            suggestedReserveName={suggestedReserveName}
-            onUseSuggested={() => {
-              if (suggestedReserveName) {
-                setNewPlayerName(suggestedReserveName);
-              }
-            }}
+            reserveHoldPlayerNames={heldReserveNames}
+            addSuggestions={Object.values(players).map((p) => p.name)}
             onAddName={(name, index) => addToReserveLine(name, index)}
             onMove={(from, to) => moveReserveLinePlayer(from, to)}
             onRemove={(name, holdTop) => removeFromReserveLine(name.toLowerCase(), holdTop)}

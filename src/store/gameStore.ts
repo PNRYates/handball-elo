@@ -28,7 +28,7 @@ export interface TurnStateSnapshot {
   _lastSnapshot: GameSnapshot | null;
   recentEntrants: string[];
   reserveLine: string[];
-  reserveHoldPlayerId: string | null;
+  reserveHoldPlayerIds: string[];
 }
 
 export interface WorkspaceAnalyticsState {
@@ -61,7 +61,7 @@ export interface WorkspaceState {
   showReserveButtons: boolean;
   trackReserveLine: boolean;
   reserveLine: string[];
-  reserveHoldPlayerId: string | null;
+  reserveHoldPlayerIds: string[];
   undoStack: TurnStateSnapshot[];
   redoStack: TurnStateSnapshot[];
   recentEntrants: string[];
@@ -98,7 +98,7 @@ interface GameStore extends PersistedGameState {
   addToReserveLine: (name: string, index?: number) => void;
   moveReserveLinePlayer: (fromIndex: number, toIndex: number) => void;
   removeFromReserveLine: (playerId: string, holdTop: boolean) => void;
-  clearReserveHold: () => void;
+  clearReserveHold: (playerId?: string) => void;
   setAnalyticsFilter: (next: AnalyticsFilterState) => void;
   setSelectedPlayers: (next: string[]) => void;
   setH2hSort: (next: 'volume' | 'net' | 'ratio') => void;
@@ -165,7 +165,7 @@ function createWorkspaceState(id: string, name: string, now = Date.now()): Works
     showReserveButtons: true,
     trackReserveLine: false,
     reserveLine: [],
-    reserveHoldPlayerId: null,
+    reserveHoldPlayerIds: [],
     undoStack: [],
     redoStack: [],
     recentEntrants: [],
@@ -358,10 +358,11 @@ function normalizeTurnStateSnapshot(input: unknown): TurnStateSnapshot | null {
     reserveLine: Array.isArray(input.reserveLine)
       ? input.reserveLine.filter((id): id is string => typeof id === 'string')
       : [],
-    reserveHoldPlayerId:
-      typeof input.reserveHoldPlayerId === 'string' || input.reserveHoldPlayerId === null
-        ? input.reserveHoldPlayerId
-        : null,
+    reserveHoldPlayerIds: Array.isArray(input.reserveHoldPlayerIds)
+      ? input.reserveHoldPlayerIds.filter((id): id is string => typeof id === 'string')
+      : typeof input.reserveHoldPlayerId === 'string'
+        ? [input.reserveHoldPlayerId]
+        : [],
   };
 }
 
@@ -418,10 +419,11 @@ function sanitizeWorkspaceState(input: unknown, fallbackId: string, fallbackName
     reserveLine: Array.isArray(input.reserveLine)
       ? input.reserveLine.filter((id): id is string => typeof id === 'string')
       : fallback.reserveLine,
-    reserveHoldPlayerId:
-      typeof input.reserveHoldPlayerId === 'string' || input.reserveHoldPlayerId === null
-        ? input.reserveHoldPlayerId
-        : fallback.reserveHoldPlayerId,
+    reserveHoldPlayerIds: Array.isArray(input.reserveHoldPlayerIds)
+      ? input.reserveHoldPlayerIds.filter((id): id is string => typeof id === 'string')
+      : typeof input.reserveHoldPlayerId === 'string'
+        ? [input.reserveHoldPlayerId]
+        : fallback.reserveHoldPlayerIds,
     undoStack: Array.isArray(input.undoStack)
       ? input.undoStack
           .map(normalizeTurnStateSnapshot)
@@ -530,7 +532,7 @@ function createTurnStateSnapshot(workspace: WorkspaceState): TurnStateSnapshot {
       : null,
     recentEntrants: [...workspace.recentEntrants],
     reserveLine: [...workspace.reserveLine],
-    reserveHoldPlayerId: workspace.reserveHoldPlayerId,
+    reserveHoldPlayerIds: [...workspace.reserveHoldPlayerIds],
   };
 }
 
@@ -708,12 +710,12 @@ export const useGameStore = create<GameStore>((set, get) => ({
         };
 
     const reserveLine = workspace.reserveLine.filter((id) => id !== playerId);
-    if (workspace.reserveHoldPlayerId === playerId) {
+    if (workspace.reserveHoldPlayerIds.includes(playerId)) {
       set(
         updateWorkspace(state, state.activeWorkspaceId, (currentWorkspace) => ({
           ...currentWorkspace,
           players,
-          reserveHoldPlayerId: null,
+          reserveHoldPlayerIds: currentWorkspace.reserveHoldPlayerIds.filter((id) => id !== playerId),
           reserveLine: [playerId, ...reserveLine],
         }))
       );
@@ -763,21 +765,21 @@ export const useGameStore = create<GameStore>((set, get) => ({
       updateWorkspace(state, state.activeWorkspaceId, (currentWorkspace) => ({
         ...currentWorkspace,
         reserveLine,
-        reserveHoldPlayerId: holdTop
-          ? playerId
-          : currentWorkspace.reserveHoldPlayerId === playerId
-            ? null
-            : currentWorkspace.reserveHoldPlayerId,
+        reserveHoldPlayerIds: holdTop
+          ? [...currentWorkspace.reserveHoldPlayerIds.filter((id) => id !== playerId), playerId]
+          : currentWorkspace.reserveHoldPlayerIds.filter((id) => id !== playerId),
       }))
     );
   },
 
-  clearReserveHold: () => {
+  clearReserveHold: (playerId) => {
     const state = get();
     set(
       updateWorkspace(state, state.activeWorkspaceId, (workspace) => ({
         ...workspace,
-        reserveHoldPlayerId: null,
+        reserveHoldPlayerIds: playerId
+          ? workspace.reserveHoldPlayerIds.filter((id) => id !== playerId)
+          : [],
       }))
     );
   },
@@ -970,12 +972,12 @@ export const useGameStore = create<GameStore>((set, get) => ({
       : workspace.recentEntrants;
 
     let reserveLine = workspace.reserveLine;
-    let reserveHoldPlayerId = workspace.reserveHoldPlayerId;
+    let reserveHoldPlayerIds = workspace.reserveHoldPlayerIds;
     if (workspace.trackReserveLine) {
       reserveLine = reserveLine.filter((id) => !result.newCourt.includes(id));
       if (result.newPlayer?.id) {
         reserveLine = reserveLine.filter((id) => id !== result.newPlayer?.id);
-        if (reserveHoldPlayerId === result.newPlayer?.id) reserveHoldPlayerId = null;
+        reserveHoldPlayerIds = reserveHoldPlayerIds.filter((id) => id !== result.newPlayer?.id);
       }
       if (eliminatedPos !== 0) {
         const eliminatedId = workspace.court[eliminatedPos];
@@ -1000,7 +1002,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
         redoStack: [],
         recentEntrants: updatedRecentEntrants,
         reserveLine,
-        reserveHoldPlayerId,
+        reserveHoldPlayerIds,
         hiddenPlayerIds,
       }))
     );
@@ -1024,7 +1026,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
         _lastSnapshot: previous._lastSnapshot,
         recentEntrants: previous.recentEntrants,
         reserveLine: previous.reserveLine,
-        reserveHoldPlayerId: previous.reserveHoldPlayerId,
+        reserveHoldPlayerIds: previous.reserveHoldPlayerIds,
         undoStack: workspace.undoStack.slice(0, -1),
         redoStack: [...workspace.redoStack, currentSnapshot].slice(-MAX_TURN_STACK),
       }))
@@ -1049,7 +1051,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
         _lastSnapshot: next._lastSnapshot,
         recentEntrants: next.recentEntrants,
         reserveLine: next.reserveLine,
-        reserveHoldPlayerId: next.reserveHoldPlayerId,
+        reserveHoldPlayerIds: next.reserveHoldPlayerIds,
         redoStack: workspace.redoStack.slice(0, -1),
         undoStack: [...workspace.undoStack, currentSnapshot].slice(-MAX_TURN_STACK),
       }))
@@ -1233,7 +1235,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
         : null,
       recentEntrants: snap.recentEntrants.map(mapId),
       reserveLine: snap.reserveLine.map(mapId),
-      reserveHoldPlayerId: snap.reserveHoldPlayerId ? mapId(snap.reserveHoldPlayerId) : null,
+      reserveHoldPlayerIds: snap.reserveHoldPlayerIds.map(mapId),
     });
 
     set(
@@ -1248,7 +1250,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
         redoStack: workspace.redoStack.map(mapTurnStateSnapshot),
         recentEntrants: workspace.recentEntrants.map(mapId),
         reserveLine: workspace.reserveLine.map(mapId),
-        reserveHoldPlayerId: workspace.reserveHoldPlayerId ? mapId(workspace.reserveHoldPlayerId) : null,
+        reserveHoldPlayerIds: workspace.reserveHoldPlayerIds.map(mapId),
         hiddenPlayerIds: workspace.hiddenPlayerIds.map(mapId),
       }))
     );

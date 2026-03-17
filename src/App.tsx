@@ -400,6 +400,7 @@ export default function App() {
           ? 'Sync error'
           : 'Synced';
   const isAnalysisRoute = location.pathname === '/analysis';
+  const isCourtRoute = location.pathname === '/';
 
   const appVersion = import.meta.env.VITE_APP_VERSION ?? 'dev';
 
@@ -425,7 +426,7 @@ export default function App() {
         onRenameWorkspace={sampleMode ? undefined : (id, name) => void handleRenameWorkspace(id, name)}
         onDeleteWorkspace={sampleMode ? undefined : (id) => void handleDeleteWorkspace(id)}
       />
-      <main className={`${isAnalysisRoute ? 'max-w-7xl' : 'max-w-xl'} w-full mx-auto px-4 py-6 flex-1`}>
+      <main className={`${isAnalysisRoute ? 'max-w-7xl' : isCourtRoute ? 'max-w-6xl' : 'max-w-xl'} w-full mx-auto px-4 py-6 flex-1`}>
         <Routes>
           <Route path="/" element={<CourtPage />} />
           <Route path="/leaderboard" element={<LeaderboardPage />} />
