@@ -33,6 +33,7 @@ export default function SettingsPage({
   const setTheme = useGameStore((s) => s.setTheme);
   const setRequireKiller = useGameStore((s) => s.setRequireKiller);
   const setShowReserveButtons = useGameStore((s) => s.setShowReserveButtons);
+  const setTrackReserveLine = useGameStore((s) => s.setTrackReserveLine);
 
   const effectiveActiveWorkspaceId = activeWorkspaceId ?? workspace.id;
   const effectiveWorkspaces = useMemo(
@@ -288,6 +289,28 @@ export default function SettingsPage({
         <p className="text-xs text-gray-500">
           Shows quick-tap reserve and recent entrant chips during replacement entry.
         </p>
+        <label className="flex items-center justify-between gap-3 pt-1">
+          <span className="text-sm">Track reserve line</span>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={workspace.trackReserveLine}
+            onClick={() => setTrackReserveLine(!workspace.trackReserveLine)}
+            className={`w-12 h-7 rounded-full p-1 transition-colors ${
+              workspace.trackReserveLine ? 'bg-amber-600' : 'bg-gray-600'
+            }`}
+          >
+            <span
+              className={`block w-5 h-5 rounded-full bg-white transition-transform ${
+                workspace.trackReserveLine ? 'translate-x-5' : 'translate-x-0'
+              }`}
+            />
+          </button>
+        </label>
+        <p className="text-xs text-gray-500">
+          Shows a reserve queue next to court controls with drag/drop and manual overrides.
+        </p>
+
       </section>
 
       <section className="bg-gray-800 border border-gray-700 rounded-lg p-4 space-y-3">

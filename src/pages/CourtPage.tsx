@@ -6,6 +6,7 @@ import InitialSetup from '../components/setup/InitialSetup';
 import CourtDisplay from '../components/court/CourtDisplay';
 import TurnRecorder from '../components/turn/TurnRecorder';
 import MobileSpeedPanel from '../components/court/MobileSpeedPanel';
+import ReserveLinePanel from '../components/turn/ReserveLinePanel';
 
 export default function CourtPage() {
   const requireKiller = useGameStore((s) => selectActiveWorkspace(s).requireKiller);
@@ -21,6 +22,13 @@ export default function CourtPage() {
   const undoStack = useGameStore((s) => selectActiveWorkspace(s).undoStack);
   const redoStack = useGameStore((s) => selectActiveWorkspace(s).redoStack);
   const recentEntrants = useGameStore((s) => selectActiveWorkspace(s).recentEntrants);
+  const trackReserveLine = useGameStore((s) => selectActiveWorkspace(s).trackReserveLine);
+  const reserveLineIds = useGameStore((s) => selectActiveWorkspace(s).reserveLine);
+  const reserveHoldPlayerId = useGameStore((s) => selectActiveWorkspace(s).reserveHoldPlayerId);
+  const addToReserveLine = useGameStore((s) => s.addToReserveLine);
+  const moveReserveLinePlayer = useGameStore((s) => s.moveReserveLinePlayer);
+  const removeFromReserveLine = useGameStore((s) => s.removeFromReserveLine);
+  const clearReserveHold = useGameStore((s) => s.clearReserveHold);
 
   const [killerPos, setKillerPos] = useState<CourtPosition | null>(null);
   const [eliminatedPos, setEliminatedPos] = useState<CourtPosition | null>(null);
@@ -70,6 +78,12 @@ export default function CourtPage() {
   const canRedo = redoStack.length > 0;
   const showSpeedPanel = isMobile;
   const showQuickSwap = showReserveButtons;
+  const reserveLineNames = reserveLineIds
+    .filter((id) => !court.includes(id))
+    .map((id) => players[id]?.name ?? id);
+  const suggestedReserveName = needsNewPlayer
+    ? (reserveHoldPlayerId ? (players[reserveHoldPlayerId]?.name ?? reserveHoldPlayerId) : reserveLineNames[0] ?? null)
+    : null;
 
   useEffect(() => {
     const media = window.matchMedia('(max-width: 767px)');
@@ -185,13 +199,15 @@ export default function CourtPage() {
           onRedo={redoLastTurn}
         />
       )}
-      <CourtDisplay
-        killerPos={requireKiller ? killerPos : null}
-        eliminatedPos={eliminatedPos}
-        onPositionClick={handlePositionPress}
-        phase={phase}
-      />
-      <TurnRecorder
+      <div className={trackReserveLine ? 'grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(320px,1fr)] items-start' : ''}>
+        <div className="space-y-4">
+          <CourtDisplay
+            killerPos={requireKiller ? killerPos : null}
+            eliminatedPos={eliminatedPos}
+            onPositionClick={handlePositionPress}
+            phase={phase}
+          />
+          <TurnRecorder
         killerPos={effectiveKillerPos}
         eliminatedPos={eliminatedPos}
         requireKiller={requireKiller}
@@ -207,7 +223,26 @@ export default function CourtPage() {
         recentEntrants={recentEntrantNames}
         onQuickSwapPick={handleQuickSwapPick}
         showQuickSwap={showQuickSwap}
+        suggestedReserveName={trackReserveLine ? suggestedReserveName : null}
       />
+        </div>
+        {trackReserveLine && (
+          <ReserveLinePanel
+            reserveLine={reserveLineNames}
+            reserveHoldPlayerName={reserveHoldPlayerId ? (players[reserveHoldPlayerId]?.name ?? reserveHoldPlayerId) : null}
+            suggestedReserveName={suggestedReserveName}
+            onUseSuggested={() => {
+              if (suggestedReserveName) {
+                setNewPlayerName(suggestedReserveName);
+              }
+            }}
+            onAddName={(name, index) => addToReserveLine(name, index)}
+            onMove={(from, to) => moveReserveLinePlayer(from, to)}
+            onRemove={(name, holdTop) => removeFromReserveLine(name.toLowerCase(), holdTop)}
+            onClearHold={clearReserveHold}
+          />
+        )}
+      </div>
       <div className="flex gap-2">
         {!isMobile && (
           <>
