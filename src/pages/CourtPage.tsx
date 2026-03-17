@@ -202,7 +202,7 @@ export default function CourtPage() {
           onRedo={redoLastTurn}
         />
       )}
-      <div className={trackReserveLine ? 'grid gap-4 lg:grid-cols-[minmax(0,4fr)_minmax(320px,1fr)] items-start' : ''}>
+      <div className={trackReserveLine ? 'grid gap-4 lg:grid-cols-2 items-start' : ''}>
         <div className="space-y-4">
           <CourtDisplay
             killerPos={requireKiller ? killerPos : null}
