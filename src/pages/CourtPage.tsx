@@ -78,14 +78,18 @@ export default function CourtPage() {
   const canRedo = redoStack.length > 0;
   const showSpeedPanel = isMobile;
   const showQuickSwap = showReserveButtons;
-  const reserveLineNames = reserveLineIds
+  const reserveLineItems = reserveLineIds
     .filter((id) => !court.includes(id))
-    .map((id) => players[id]?.name ?? id);
+    .map((id) => ({
+      id,
+      name: players[id]?.name ?? id,
+      elo: players[id]?.elo ?? 1000,
+    }));
   const heldReserveNames = reserveHoldPlayerIds
     .filter((id) => !court.includes(id))
     .map((id) => players[id]?.name ?? id);
   const suggestedReserveName = needsNewPlayer
-    ? (heldReserveNames[0] ?? reserveLineNames[0] ?? null)
+    ? (heldReserveNames[0] ?? reserveLineItems[0]?.name ?? null)
     : null;
 
   useEffect(() => {
@@ -202,7 +206,7 @@ export default function CourtPage() {
           onRedo={redoLastTurn}
         />
       )}
-      <div className={trackReserveLine ? 'grid gap-4 lg:grid-cols-2 items-start' : ''}>
+      <div className={trackReserveLine ? 'grid gap-6 lg:gap-8 lg:grid-cols-2 items-start' : ''}>
         <div className="space-y-4">
           <CourtDisplay
             killerPos={requireKiller ? killerPos : null}
@@ -231,10 +235,10 @@ export default function CourtPage() {
         </div>
         {trackReserveLine && (
           <ReserveLinePanel
-            reserveLine={reserveLineNames}
+            reserveLine={reserveLineItems}
             reserveHoldPlayerNames={heldReserveNames}
             addSuggestions={Object.values(players).map((p) => p.name)}
-            onAddName={(name, index) => addToReserveLine(name, index)}
+            onAddName={addToReserveLine}
             onMove={(from, to) => moveReserveLinePlayer(from, to)}
             onRemove={(name, holdTop) => removeFromReserveLine(name.toLowerCase(), holdTop)}
             onClearHold={clearReserveHold}
